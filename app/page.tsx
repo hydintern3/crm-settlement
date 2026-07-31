@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { REPORTS } from "./lib/report-registry";
+import { ImportDialog } from "./components/ImportDialog";
 
 type BusinessRow = {
   businessType: string;
@@ -142,6 +143,7 @@ function Ranking({ items, label }: { items: RankedItem[]; label: string }) {
 export default function Home() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [activeNav, setActiveNav] = useState("总览");
+  const [showImport, setShowImport] = useState(false);
   const [filters, setFilters] = useState({
     year: "全部年份",
     month: "全部月份",
@@ -220,7 +222,7 @@ export default function Home() {
           <div className="top-actions">
             <span className="sync-state">↻ 数据更新于 {updated}</span>
             <button className="ghost-button">导出当前视图</button>
-            <button className="primary-button" onClick={() => setActiveNav("数据中心")}>＋ 导入数据</button>
+            <button className="primary-button" onClick={() => setShowImport(true)}>＋ 导入数据</button>
           </div>
         </header>
 
@@ -301,6 +303,7 @@ export default function Home() {
         </section>
         <footer><span>规则版本 v1.0 · 2 期暂作较新快照 · 结算结果仅供内部工作分流</span><span>BH 回归 491 / 491 一致</span></footer>
       </main>
+      <ImportDialog open={showImport} onClose={() => setShowImport(false)} onImported={(data) => setSnapshot(data)} />
     </div>
   );
 }
