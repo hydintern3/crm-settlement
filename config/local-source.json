@@ -1,0 +1,7 @@
+{
+  "directory": "../csv_output",
+  "currentBusinessFile": "2期.csv",
+  "providerFile": "服务商信息.csv",
+  "allowedExtensions": [".csv"],
+  "output": "public/data/local-snapshot.json"
+}

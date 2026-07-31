@@ -1,0 +1,66 @@
+{
+  "mode": "demo",
+  "generatedAt": "2026-07-28T16:37:00+08:00",
+  "source": {
+    "label": "脱敏演示数据",
+    "files": ["2期示例.csv", "服务商信息示例.csv"],
+    "currentFile": "2期示例.csv"
+  },
+  "summary": {
+    "total": 283,
+    "active": 221,
+    "installs": 194,
+    "removals": 62,
+    "monthlyMetering": 4268000,
+    "review": 239
+  },
+  "monthly": [
+    { "month": "01", "installs": 10, "removals": 3, "amount": 245000 },
+    { "month": "02", "installs": 12, "removals": 5, "amount": 328000 },
+    { "month": "03", "installs": 17, "removals": 4, "amount": 388000 },
+    { "month": "04", "installs": 19, "removals": 6, "amount": 441000 },
+    { "month": "05", "installs": 22, "removals": 4, "amount": 486000 },
+    { "month": "06", "installs": 24, "removals": 7, "amount": 529000 },
+    { "month": "07", "installs": 18, "removals": 5, "amount": 472000 },
+    { "month": "08", "installs": 15, "removals": 6, "amount": 389000 },
+    { "month": "09", "installs": 13, "removals": 5, "amount": 331000 },
+    { "month": "10", "installs": 16, "removals": 7, "amount": 279000 },
+    { "month": "11", "installs": 14, "removals": 5, "amount": 205000 },
+    { "month": "12", "installs": 14, "removals": 5, "amount": 155000 }
+  ],
+  "meteringRules": [
+    { "label": "新增量", "value": 50, "color": "#2764e7" },
+    { "label": "新量", "value": 116, "color": "#27a184" },
+    { "label": "存量", "value": 117, "color": "#d89a3b" },
+    { "label": "超期", "value": 0, "color": "#ad6788" }
+  ],
+  "owners": [
+    { "key": "o1", "label": "负责人 A", "lines": 58, "amount": 1042000, "share": 24.4 },
+    { "key": "o2", "label": "负责人 B", "lines": 51, "amount": 872000, "share": 20.4 },
+    { "key": "o3", "label": "负责人 C", "lines": 44, "amount": 738000, "share": 17.3 },
+    { "key": "o4", "label": "负责人 D", "lines": 39, "amount": 621000, "share": 14.6 },
+    { "key": "o5", "label": "负责人 E", "lines": 31, "amount": 485000, "share": 11.4 }
+  ],
+  "providers": [
+    { "key": "p1", "label": "示例服务商一", "secondary": "SP-001", "lines": 42, "amount": 736000, "share": 17.2 },
+    { "key": "p2", "label": "示例服务商二", "secondary": "SP-002", "lines": 37, "amount": 642000, "share": 15.0 },
+    { "key": "p3", "label": "示例服务商三", "secondary": "SP-003", "lines": 33, "amount": 571000, "share": 13.4 },
+    { "key": "p4", "label": "示例服务商四", "secondary": "SP-004", "lines": 28, "amount": 488000, "share": 11.4 },
+    { "key": "p5", "label": "示例服务商五", "secondary": "SP-005", "lines": 25, "amount": 409000, "share": 9.6 }
+  ],
+  "rows": [
+    { "businessType": "新装", "businessName": "电信双线", "owner": "负责人 A", "serviceCode": "SP-001", "serviceName": "示例服务商一", "completedDate": "2026-01-18", "activeStatus": "活跃", "meteringRule": "新增量", "lines": 1, "monthlyMetering": 18800 },
+    { "businessType": "新装", "businessName": "政企固网", "owner": "负责人 B", "serviceCode": "SP-002", "serviceName": "示例服务商二", "completedDate": "2026-02-12", "activeStatus": "活跃", "meteringRule": "新增量", "lines": 1, "monthlyMetering": 15400 },
+    { "businessType": "变更", "businessName": "电信双线", "owner": "负责人 C", "serviceCode": "SP-003", "serviceName": "示例服务商三", "completedDate": "2025-11-08", "activeStatus": "活跃", "meteringRule": "新量", "lines": 1, "monthlyMetering": 12300 },
+    { "businessType": "拆机", "businessName": "政企宽带", "owner": "负责人 A", "serviceCode": "SP-001", "serviceName": "示例服务商一", "completedDate": "2026-03-25", "activeStatus": "不活跃", "meteringRule": "存量", "lines": 1, "monthlyMetering": 9800 },
+    { "businessType": "新装", "businessName": "电信双线", "owner": "负责人 D", "serviceCode": "SP-004", "serviceName": "示例服务商四", "completedDate": "2026-04-10", "activeStatus": "活跃", "meteringRule": "新增量", "lines": 1, "monthlyMetering": 22700 },
+    { "businessType": "新装", "businessName": "联通数据", "owner": "负责人 E", "serviceCode": "SP-005", "serviceName": "示例服务商五", "completedDate": "2025-08-21", "activeStatus": "活跃", "meteringRule": "新量", "lines": 1, "monthlyMetering": 8400 },
+    { "businessType": "拆机", "businessName": "电信双线", "owner": "负责人 B", "serviceCode": "SP-002", "serviceName": "示例服务商二", "completedDate": "2026-05-19", "activeStatus": "不活跃", "meteringRule": "存量", "lines": 1, "monthlyMetering": 17600 },
+    { "businessType": "新装", "businessName": "政企固网", "owner": "负责人 C", "serviceCode": "SP-003", "serviceName": "示例服务商三", "completedDate": "2026-06-06", "activeStatus": "活跃", "meteringRule": "新增量", "lines": 1, "monthlyMetering": 20900 }
+  ],
+  "quality": [
+    { "label": "BH 回归差异", "value": 0, "status": "pass" },
+    { "label": "供应商空值", "value": 1, "status": "review" },
+    { "label": "出账月份空值", "value": 12, "status": "review" }
+  ]
+}
