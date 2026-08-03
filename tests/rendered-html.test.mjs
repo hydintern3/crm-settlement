@@ -58,5 +58,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(dataModelSource, /初始完工日期/);
   assert.match(dataModelSource, /const month = row\.completedDate/);
   assert.match(workbookSource, /flatMap/);
+  assert.match(workbookSource, /deduplicateCandidates/);
+  assert.match(workbookSource, /keyField: "设备编号"/);
+  assert.match(workbookSource, /shouldReplace/);
   await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));
 });

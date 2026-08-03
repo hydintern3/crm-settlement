@@ -5,6 +5,7 @@ export type BusinessRow = {
   businessName: string;
   owner: string;
   provider: string;
+  deviceCode: string;
   serviceCode: string;
   serviceName: string;
   completedDate: string;
@@ -38,6 +39,15 @@ export type Snapshot = {
     files: string[];
     currentFile: string;
     sheets?: SheetSource[];
+    deduplication?: {
+      keyField: "设备编号";
+      inputRows: number;
+      outputRows: number;
+      removedRows: number;
+      duplicateKeys: number;
+      blankKeyRows: number;
+      strategy: string;
+    };
   };
   summary: {
     total: NumericValue;
@@ -116,6 +126,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     businessName: textValue(first(row, ["业务名称", "产品名称"])),
     owner: textValue(first(row, ["负责人", "销售负责人", "客户经理"])),
     provider: textValue(first(row, ["供应商", "服务商", "服务提供商"])),
+    deviceCode: textValue(first(row, ["设备编号", "设备号"])),
     serviceCode: textValue(first(row, ["I服务编号", "I 服务编号", "服务编号"])),
     serviceName: textValue(first(row, ["I服务简称", "I 服务简称", "服务简称"])),
     completedDate: dateValue(first(row, ["完工日期", "初始完工日期", "最终完工日期", "业务完工日期", "开通日期"])),
@@ -213,6 +224,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
   const rows = Array.isArray(input.rows) ? input.rows.map((row) => ({
     ...row,
     provider: row.provider ?? "",
+    deviceCode: row.deviceCode ?? "",
     lines: row.lines === undefined ? null : row.lines,
     monthlyMetering: row.monthlyMetering === undefined ? null : row.monthlyMetering,
   })) : [];

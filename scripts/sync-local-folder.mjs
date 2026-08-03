@@ -150,6 +150,7 @@ const safeRows = businessRows.slice(0, 500).map((row) => ({
   businessName: row["业务名称"],
   owner: row["负责人"],
   provider: row["供应商"],
+  deviceCode: row["设备编号"],
   serviceCode: row["I 服务编号"],
   serviceName: row["I 服务简称"],
   completedDate: normalizedDate(row["完工日期"] || row["初始完工日期"]),

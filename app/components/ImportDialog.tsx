@@ -91,7 +91,7 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
         {sheets.length > 0 && <div className="sheet-picker">
           <fieldset className="business-sheet-fieldset"><legend>业务工作表（可多选汇总）</legend>
             <div className="business-sheet-options">{businessSheets.map((sheet) => <label key={sheet.id} className={businessIds.includes(sheet.id) ? "selected" : ""}><input type="checkbox" checked={businessIds.includes(sheet.id)} onChange={() => toggleBusiness(sheet.id)} /><span><strong>{sheet.fileName} / {sheet.sheetName}</strong><small>{sheet.rowCount} 行</small></span></label>)}</div>
-            {businessIds.length > 1 && <p className="merge-warning">将合并 {businessIds.length} 个业务工作表、共 {businessSheets.filter((sheet) => businessIds.includes(sheet.id)).reduce((sum, sheet) => sum + sheet.rowCount, 0)} 行。请确认这些 sheet 可以按当前统计口径相加。</p>}
+            {businessIds.length > 1 && <p className="merge-warning">将合并 {businessIds.length} 个业务工作表、共 {businessSheets.filter((sheet) => businessIds.includes(sheet.id)).reduce((sum, sheet) => sum + sheet.rowCount, 0)} 行，并按设备编号自动去重；重复时优先保留较高期次。请确认这些 sheet 可以按当前统计口径合并。</p>}
           </fieldset>
           <label>服务商工作表（可选）
             <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>

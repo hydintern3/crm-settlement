@@ -155,6 +155,10 @@ h2 { margin-bottom: 0; font: 700 16px/1.25 "STSong", "Microsoft YaHei UI", serif
 .filter-options button.active { border-color: #8ca9d2; color: #fff; background: #183f72; box-shadow: 0 3px 8px rgba(24,63,114,.13); }
 .filter-options button.all { background: #315f99; }
 .filter-empty { min-height: 29px; display: grid; place-items: center; color: #a0aab7; font-size: 10px; }
+.dedup-banner { margin-top: 11px; padding: 10px 13px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px solid #cfe5dc; color: #326a5b; background: #eef8f4; border-radius: 8px; }
+.dedup-banner strong, .dedup-banner span { display: inline; font-size: 9px; }
+.dedup-banner strong { margin-right: 10px; font-size: 10px; }
+.dedup-banner small { color: #71887f; font-size: 8px; text-align: right; }
 
 .metric-grid { margin: 17px 0; display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 11px; }
 .metric-card {
@@ -372,4 +376,6 @@ footer { padding: 18px 4px 2px; display: flex; justify-content: space-between; c
   .import-footer { align-items: flex-start; gap: 12px; }
   .filter-grid { grid-template-columns: 1fr; }
   .filter-group legend small { display: none; }
+  .dedup-banner { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .dedup-banner small { text-align: left; }
 }
