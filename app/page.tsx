@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
 import { ImportDialog } from "./components/ImportDialog";
 import { MonthlyChart, RankingChart, RuleChart } from "./components/AnalyticsCharts";
@@ -12,7 +12,7 @@ const NAV_ITEMS = [
 ] as const;
 type ViewName = (typeof NAV_ITEMS)[number][0];
 
-const EMPTY_FILTERS = { year: "全部年份", month: "全部月份", status: "全部状态", rule: "全部计量规则", keyword: "" };
+const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], statuses: [] as string[], rules: [] as string[], keyword: "" };
 const safeText = (value: string | null | undefined) => value?.trim() || "--";
 const numberText = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
 const moneyWan = (value: NumericValue) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value / 10000);
@@ -31,6 +31,35 @@ function exportRows(rows: BusinessRow[]) {
 
 function Panel({ label, title, aside, children, className = "" }: { label: string; title: string; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return <article className={`panel ${className}`}><div className="panel-header"><div><span className="section-label">{label}</span><h2>{title}</h2></div>{aside}</div>{children}</article>;
+}
+
+function MultiSelectGrid({ label, options, selected, onChange }: { label: string; options: string[]; selected: string[]; onChange: (next: string[]) => void }) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  function startLongPress(option: string) {
+    longPressed.current = false;
+    timer.current = setTimeout(() => {
+      longPressed.current = true;
+      onChange([option]);
+    }, 550);
+  }
+  function cancelLongPress() {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  }
+  function toggle(option: string) {
+    if (longPressed.current) { longPressed.current = false; return; }
+    if (!selected.length) return onChange([option]);
+    if (selected.includes(option)) return onChange(selected.length === 1 ? [] : selected.filter((value) => value !== option));
+    onChange([...selected, option]);
+  }
+
+  return <fieldset className="filter-group"><legend>{label}<small>短按多选 · 长按单选</small></legend><div className="filter-options">
+    <button type="button" className={!selected.length ? "active all" : ""} aria-pressed={!selected.length} onClick={() => onChange([])}>全部</button>
+    {options.length ? options.map((option) => <button type="button" key={option} className={selected.includes(option) ? "active" : ""} aria-pressed={selected.includes(option)} title={`点击增减选择；长按只选 ${option}`} onPointerDown={() => startLongPress(option)} onPointerUp={cancelLongPress} onPointerLeave={cancelLongPress} onPointerCancel={cancelLongPress} onContextMenu={(event) => event.preventDefault()} onClick={() => toggle(option)}>{option}</button>) : <span className="filter-empty">--</span>}
+  </div></fieldset>;
 }
 
 function Metrics({ rows }: { rows: BusinessRow[] }) {
@@ -80,10 +109,10 @@ export default function Home() {
 
   const filteredRows = useMemo(() => (snapshot?.rows ?? []).filter((row) => {
     const [year, month] = row.completedDate.split("-");
-    return (filters.year === "全部年份" || filters.year === year) && (filters.month === "全部月份" || filters.month === month) &&
-      (filters.status === "全部状态" || row.activeStatus === filters.status) && (filters.rule === "全部计量规则" || row.meteringRule === filters.rule) &&
+    return (!filters.years.length || filters.years.includes(year)) && (!filters.months.length || filters.months.includes(month)) &&
+      (!filters.statuses.length || filters.statuses.includes(row.activeStatus)) && (!filters.rules.length || filters.rules.includes(row.meteringRule)) &&
       (!deferredKeyword || [row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName].join(" ").toLowerCase().includes(deferredKeyword));
-  }), [snapshot, filters.year, filters.month, filters.status, filters.rule, deferredKeyword]);
+  }), [snapshot, filters.years, filters.months, filters.statuses, filters.rules, deferredKeyword]);
   const analysis = useMemo(() => buildSnapshot(filteredRows, snapshot?.source ?? EMPTY_SNAPSHOT.source, snapshot?.mode ?? "empty"), [filteredRows, snapshot?.source, snapshot?.mode]);
 
   if (!snapshot) return <main className="loading-screen"><div className="loading-mark">CRM</div><p>正在建立业务分析视图…</p></main>;
@@ -93,15 +122,15 @@ export default function Home() {
   const updated = snapshot.mode === "empty" ? "--" : new Date(snapshot.generatedAt).toLocaleString("zh-CN", { hour12: false });
 
   function navigate(name: ViewName) { setActiveNav(name); window.history.replaceState(null, "", `#${encodeURIComponent(name)}`); }
-  function selectRule(name: string) { setFilters((value) => ({ ...value, rule: name })); navigate("统一查询"); }
+  function selectRule(name: string) { setFilters((value) => ({ ...value, rules: [name] })); navigate("统一查询"); }
   function selectRank(name: string, field: "owner" | "provider") { setFilters((value) => ({ ...value, keyword: name })); navigate(field === "owner" ? "销售分析" : "服务商分析"); }
 
-  const filterBar = <section className="filter-bar"><label className="search-box"><span>⌕</span><input value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} placeholder="搜索负责人、供应商、服务编号…" /></label>
-    <select value={filters.year} onChange={(event) => setFilters({ ...filters, year: event.target.value })}><option>全部年份</option>{years.map((value) => <option key={value}>{value}</option>)}</select>
-    <select value={filters.month} onChange={(event) => setFilters({ ...filters, month: event.target.value })}><option>全部月份</option>{Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0")).map((value) => <option key={value}>{value}</option>)}</select>
-    <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option>全部状态</option>{statuses.map((value) => <option key={value}>{value}</option>)}</select>
-    <select value={filters.rule} onChange={(event) => setFilters({ ...filters, rule: event.target.value })}><option>全部计量规则</option>{rules.map((value) => <option key={value}>{value}</option>)}</select>
-    <button className="clear-button" onClick={() => setFilters(EMPTY_FILTERS)}>重置筛选</button></section>;
+  const filterBar = <section className="filter-bar"><div className="filter-toolbar"><label className="search-box"><span>⌕</span><input value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} placeholder="搜索负责人、供应商、服务编号…" /></label><span className="filter-tip">点击可多选，长按约半秒切换为单选</span><button className="clear-button" onClick={() => setFilters({ ...EMPTY_FILTERS })}>重置筛选</button></div><div className="filter-grid">
+    <MultiSelectGrid label="年份" options={years} selected={filters.years} onChange={(years) => setFilters((value) => ({ ...value, years }))} />
+    <MultiSelectGrid label="月份" options={Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"))} selected={filters.months} onChange={(months) => setFilters((value) => ({ ...value, months }))} />
+    <MultiSelectGrid label="状态" options={statuses} selected={filters.statuses} onChange={(statuses) => setFilters((value) => ({ ...value, statuses }))} />
+    <MultiSelectGrid label="计量规则" options={rules} selected={filters.rules} onChange={(rules) => setFilters((value) => ({ ...value, rules }))} />
+  </div></section>;
 
   let content: React.ReactNode;
   if (activeNav === "总览") content = <><Metrics rows={filteredRows} /><section className="dashboard-grid"><Panel label="MONTHLY TREND" title="月平均计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="METERING RULE" title="计量规则分布" aside={<span className="tag">点击可下钻</span>}><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel><Panel label="SALES PERFORMANCE" title="负责人业绩"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="PROVIDER RANKING" title="服务商进单"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "provider")} /></Panel></section></>;

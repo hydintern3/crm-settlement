@@ -50,6 +50,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(sourceConfig, /\.xlsx/);
   assert.doesNotMatch(pageSource, /demo-snapshot/);
   assert.match(pageSource, /EMPTY_SNAPSHOT/);
+  assert.match(pageSource, /MultiSelectGrid/);
+  assert.match(pageSource, /startLongPress/);
+  assert.match(pageSource, /550/);
   assert.match(importSource, /\.xlsb/);
   assert.match(importSource, /businessIds/);
   assert.match(dataModelSource, /初始完工日期/);
