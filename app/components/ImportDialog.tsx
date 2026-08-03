@@ -14,7 +14,7 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
   const [message, setMessage] = useState("支持多个文件和多工作表；所有解析均在当前浏览器完成。");
   const [sheets, setSheets] = useState<InspectedSheet[]>([]);
-  const [businessId, setBusinessId] = useState("");
+  const [businessIds, setBusinessIds] = useState<string[]>([]);
   const [providerId, setProviderId] = useState("");
 
   const businessSheets = useMemo(() => sheets.filter((sheet) => sheet.kind === "business"), [sheets]);
@@ -36,7 +36,7 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
       setSheets(next);
       const business = next.find((sheet) => sheet.kind === "business" && /2期/.test(`${sheet.fileName}${sheet.sheetName}`)) ?? next.find((sheet) => sheet.kind === "business");
       const provider = next.find((sheet) => sheet.kind === "provider");
-      setBusinessId(business?.id ?? "");
+      setBusinessIds(business ? [business.id] : []);
       setProviderId(provider?.id ?? "");
       setStatus("idle");
       setMessage(`已识别 ${next.length} 个工作表：业务表 ${next.filter((sheet) => sheet.kind === "business").length} 个，服务商表 ${next.filter((sheet) => sheet.kind === "provider").length} 个。`);
@@ -46,9 +46,13 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
     }
   }
 
+  function toggleBusiness(id: string) {
+    setBusinessIds((selected) => selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
+  }
+
   function confirm() {
     try {
-      const snapshot = snapshotFromSheets(sheets, businessId, providerId || undefined);
+      const snapshot = snapshotFromSheets(sheets, businessIds, providerId || undefined);
       onImported(snapshot);
       setStatus("idle");
       onClose();
@@ -85,12 +89,10 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
         </div>
 
         {sheets.length > 0 && <div className="sheet-picker">
-          <label>当前业务工作表
-            <select value={businessId} onChange={(event) => setBusinessId(event.target.value)}>
-              <option value="">请选择</option>
-              {businessSheets.map((sheet) => <option key={sheet.id} value={sheet.id}>{sheet.fileName} / {sheet.sheetName}（{sheet.rowCount} 行）</option>)}
-            </select>
-          </label>
+          <fieldset className="business-sheet-fieldset"><legend>业务工作表（可多选汇总）</legend>
+            <div className="business-sheet-options">{businessSheets.map((sheet) => <label key={sheet.id} className={businessIds.includes(sheet.id) ? "selected" : ""}><input type="checkbox" checked={businessIds.includes(sheet.id)} onChange={() => toggleBusiness(sheet.id)} /><span><strong>{sheet.fileName} / {sheet.sheetName}</strong><small>{sheet.rowCount} 行</small></span></label>)}</div>
+            {businessIds.length > 1 && <p className="merge-warning">将合并 {businessIds.length} 个业务工作表、共 {businessSheets.filter((sheet) => businessIds.includes(sheet.id)).reduce((sum, sheet) => sum + sheet.rowCount, 0)} 行。请确认这些 sheet 可以按当前统计口径相加。</p>}
+          </fieldset>
           <label>服务商工作表（可选）
             <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
               <option value="">暂不选择</option>
@@ -105,7 +107,7 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
         <div className={`import-status ${status}`}><i />{message}</div>
         <footer className="import-footer">
           <span>加密工作簿需先另存为未加密副本；密码不会保存到网站。</span>
-          <div className="footer-actions"><button className="text-button" onClick={onClose}>取消</button><button className="primary-button" disabled={!businessId || status === "working"} onClick={confirm}>使用所选工作表</button></div>
+          <div className="footer-actions"><button className="text-button" onClick={onClose}>取消</button><button className="primary-button" disabled={!businessIds.length || status === "working"} onClick={confirm}>汇总所选工作表</button></div>
         </footer>
       </section>
     </div>

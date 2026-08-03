@@ -294,6 +294,17 @@ footer { padding: 18px 4px 2px; display: flex; justify-content: space-between; c
 .sheet-picker { margin: 0 22px 14px; padding: 14px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; border: 1px solid var(--line); background: #fbfcfe; border-radius: 10px; }
 .sheet-picker label { display: grid; gap: 7px; color: #596980; font-size: 9px; font-weight: 600; }
 .sheet-picker select { width: 100%; height: 35px; padding: 0 9px; border: 1px solid #dfe5ed; color: #35465f; background: #fff; border-radius: 7px; font-size: 10px; }
+.business-sheet-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.business-sheet-fieldset legend { margin-bottom: 7px; color: #596980; font-size: 9px; font-weight: 600; }
+.business-sheet-options { max-height: 156px; padding: 6px; overflow-y: auto; display: grid; gap: 6px; border: 1px solid #dfe5ed; background: #fff; border-radius: 7px; }
+.business-sheet-options label { min-height: 38px; padding: 7px 8px; display: flex; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.business-sheet-options label:hover { background: #f6f8fb; }
+.business-sheet-options label.selected { border-color: #bfd0e9; background: #edf4ff; }
+.business-sheet-options input { accent-color: #183b68; }
+.business-sheet-options span, .business-sheet-options strong, .business-sheet-options small { display: block; min-width: 0; }
+.business-sheet-options strong { overflow: hidden; color: #35465f; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.business-sheet-options small { margin-top: 3px; color: #8a96a6; font-size: 8px; font-weight: 400; }
+.merge-warning { margin: 7px 0 0; color: #98671f; font-size: 8px; line-height: 1.5; }
 .sheet-summary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; }
 .sheet-chip { padding: 6px 8px; color: #69768a; background: #eef2f6; border-radius: 6px; font-size: 9px; }
 .sheet-chip.business { color: #235eae; background: #eaf1fc; }

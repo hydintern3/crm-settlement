@@ -32,13 +32,15 @@ test("server-renders the CRM platform shell and metadata", async () => {
 });
 
 test("keeps local data private and does not fall back to mock records", async () => {
-  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource] = await Promise.all([
+  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource] = await Promise.all([
     readFile(new URL(".gitignore", root), "utf8"),
     readFile(new URL("app/lib/report-registry.ts", root), "utf8"),
     readFile(new URL("scripts/sync-local-folder.mjs", root), "utf8"),
     readFile(new URL("config/local-source.json", root), "utf8"),
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/components/ImportDialog.tsx", root), "utf8"),
+    readFile(new URL("app/lib/data-model.ts", root), "utf8"),
+    readFile(new URL("app/lib/workbook-import.ts", root), "utf8"),
   ]);
 
   assert.match(gitignore, /public\/data\/local-snapshot\.json/);
@@ -49,5 +51,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.doesNotMatch(pageSource, /demo-snapshot/);
   assert.match(pageSource, /EMPTY_SNAPSHOT/);
   assert.match(importSource, /\.xlsb/);
+  assert.match(importSource, /businessIds/);
+  assert.match(dataModelSource, /初始完工日期/);
+  assert.match(dataModelSource, /const month = row\.completedDate/);
+  assert.match(workbookSource, /flatMap/);
   await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));
 });

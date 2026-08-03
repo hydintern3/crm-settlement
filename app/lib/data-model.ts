@@ -91,9 +91,16 @@ export function dateValue(value: unknown): string {
   if (value instanceof Date && Number.isFinite(value.getTime())) {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
+  if (typeof value === "number" && value >= 1 && value < 100000) {
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    const parsed = new Date(excelEpoch + Math.floor(value) * 86400000);
+    return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, "0")}-${String(parsed.getUTCDate()).padStart(2, "0")}`;
+  }
   const source = textValue(value);
   const match = source.match(/(\d{4})[/.\-年](\d{1,2})[/.\-月](\d{1,2})/);
-  return match ? `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}` : source.slice(0, 10);
+  if (match) return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  const shortYear = source.match(/(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2})$/);
+  return shortYear ? `20${shortYear[3]}-${shortYear[1].padStart(2, "0")}-${shortYear[2].padStart(2, "0")}` : source.slice(0, 10);
 }
 
 function first(row: RawRow, names: string[]) {
@@ -111,7 +118,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     provider: textValue(first(row, ["供应商", "服务商", "服务提供商"])),
     serviceCode: textValue(first(row, ["I服务编号", "I 服务编号", "服务编号"])),
     serviceName: textValue(first(row, ["I服务简称", "I 服务简称", "服务简称"])),
-    completedDate: dateValue(first(row, ["完工日期", "业务完工日期", "开通日期"])),
+    completedDate: dateValue(first(row, ["完工日期", "初始完工日期", "最终完工日期", "业务完工日期", "开通日期"])),
     activeStatus: textValue(first(row, ["活跃状态", "服务状态"])),
     meteringRule: textValue(first(row, ["计量规则"])),
     lines: numericValue(first(row, ["线数", "数量"])),
@@ -177,7 +184,7 @@ export function buildSnapshot(
   const monthlyMap = new Map<string, { installs: number; removals: number; amounts: NumericValue[] }>();
   const ruleMap = new Map<string, number>();
   for (const row of rows) {
-    const month = row.completedDate.match(/^\d{4}-(\d{2})/)?.[1];
+    const month = row.completedDate.match(/^(\d{4}-\d{2})/)?.[1];
     if (month) {
       const item = monthlyMap.get(month) ?? { installs: 0, removals: 0, amounts: [] };
       if (isInstall(row)) item.installs += 1;

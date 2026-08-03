@@ -38,7 +38,7 @@ export function MonthlyChart({ data }: { data: Snapshot["monthly"] }) {
     color: ["#2764e7", "#cb5a69"],
     grid: { left: 48, right: 18, top: 34, bottom: 42 },
     tooltip: { trigger: "axis", valueFormatter: (value) => value === null ? "--" : `¥ ${Number(value).toLocaleString("zh-CN")}` },
-    xAxis: { type: "category", data: data.map((item) => `${item.month}月`), axisLine: { lineStyle: { color: "#dfe5ed" } }, axisTick: { show: false } },
+    xAxis: { type: "category", data: data.map((item) => item.month.includes("-") ? item.month : `${item.month}月`), axisLine: { lineStyle: { color: "#dfe5ed" } }, axisTick: { show: false }, axisLabel: { rotate: data.length > 8 ? 30 : 0 } },
     yAxis: { type: "value", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: { formatter: (value: number) => `${Math.round(value / 10000)}万` } },
     dataZoom: data.length > 8 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
     series: [{ name: "月平均计量", type: "bar", barMaxWidth: 24, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: data.map((item) => item.amount) }],
