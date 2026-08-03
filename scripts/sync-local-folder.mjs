@@ -1,6 +1,7 @@
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as XLSX from "xlsx";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const config = JSON.parse(await readFile(resolve(root, "config/local-source.json"), "utf8"));
@@ -48,8 +49,19 @@ function parseCsv(text) {
 }
 
 function number(value) {
-  const parsed = Number(String(value || "").replace(/[￥¥,%\s,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
+  const source = String(value ?? "").trim();
+  if (!source) return null;
+  const parsed = Number(source.replace(/[￥¥,%\s,]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function readRows(fileName, configuredSheet) {
+  const filePath = resolve(sourceDir, fileName);
+  if (extname(fileName).toLowerCase() === ".csv") return parseCsv(await readFile(filePath, "utf8"));
+  const workbook = XLSX.read(await readFile(filePath), { type: "buffer", cellDates: true });
+  const sheetName = configuredSheet || workbook.SheetNames[0];
+  if (!sheetName || !workbook.Sheets[sheetName]) throw new Error(`${fileName} 中未找到工作表 ${configuredSheet || ""}`.trim());
+  return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false, dateNF: "yyyy-mm-dd" });
 }
 
 function normalizedDate(value) {
@@ -71,7 +83,7 @@ function groupedRanking(rows, keyOf, labelOf, secondaryOf = () => "") {
       amount: 0,
     };
     current.lines += 1;
-    current.amount += number(row["月平均计量"]);
+    current.amount += number(row["月平均计量"]) ?? 0;
     groups.set(key, current);
   }
   const total = [...groups.values()].reduce((sum, item) => sum + item.amount, 0) || 1;
@@ -88,16 +100,16 @@ const currentFile = files.includes(config.currentBusinessFile)
   ? config.currentBusinessFile
   : files.find((file) => file !== config.providerFile);
 
-if (!currentFile) throw new Error(`在 ${sourceDir} 中没有找到可导入的业务 CSV 文件。`);
+if (!currentFile) throw new Error(`在 ${sourceDir} 中没有找到可导入的业务表格文件。`);
 
-const businessRows = parseCsv(await readFile(resolve(sourceDir, currentFile), "utf8"));
+const businessRows = await readRows(currentFile, config.currentBusinessSheet);
 const providerRows = files.includes(config.providerFile)
-  ? parseCsv(await readFile(resolve(sourceDir, config.providerFile), "utf8"))
+  ? await readRows(config.providerFile, config.providerSheet)
   : [];
 const providersByCode = new Map(
   providerRows.map((row) => [row["服务编号"], row]),
 );
-const totalAmount = businessRows.reduce((sum, row) => sum + number(row["月平均计量"]), 0);
+const totalAmount = businessRows.reduce((sum, row) => sum + (number(row["月平均计量"]) ?? 0), 0);
 const isRemoval = (row) => row["业务属性"].includes("拆机");
 const isInstall = (row) => row["业务属性"].includes("新装");
 const isActive = (row) => row["活跃状态"].includes("活跃") && !row["活跃状态"].includes("不");
@@ -117,7 +129,7 @@ for (const row of businessRows) {
   if (!item) continue;
   if (isInstall(row)) item.installs += 1;
   if (isRemoval(row)) item.removals += 1;
-  item.amount += number(row["月平均计量"]);
+  item.amount += number(row["月平均计量"]) ?? 0;
 }
 
 const ruleColors = {
@@ -137,6 +149,7 @@ const safeRows = businessRows.slice(0, 500).map((row) => ({
   businessType: row["业务属性"],
   businessName: row["业务名称"],
   owner: row["负责人"],
+  provider: row["供应商"],
   serviceCode: row["I 服务编号"],
   serviceName: row["I 服务简称"],
   completedDate: normalizedDate(row["完工日期"] || row["初始完工日期"]),

@@ -31,17 +31,23 @@ test("server-renders the CRM platform shell and metadata", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
 });
 
-test("keeps local business snapshots out of source control", async () => {
-  const [gitignore, registry, syncScript, sourceConfig] = await Promise.all([
+test("keeps local data private and does not fall back to mock records", async () => {
+  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource] = await Promise.all([
     readFile(new URL(".gitignore", root), "utf8"),
     readFile(new URL("app/lib/report-registry.ts", root), "utf8"),
     readFile(new URL("scripts/sync-local-folder.mjs", root), "utf8"),
     readFile(new URL("config/local-source.json", root), "utf8"),
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/ImportDialog.tsx", root), "utf8"),
   ]);
 
   assert.match(gitignore, /public\/data\/local-snapshot\.json/);
   assert.match(registry, /REPORTS/);
   assert.match(syncScript, /providersByCode/);
   assert.match(sourceConfig, /\.\.\/csv_output/);
-  await access(new URL("public/data/demo-snapshot.json", root));
+  assert.match(sourceConfig, /\.xlsx/);
+  assert.doesNotMatch(pageSource, /demo-snapshot/);
+  assert.match(pageSource, /EMPTY_SNAPSHOT/);
+  assert.match(importSource, /\.xlsb/);
+  await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));
 });
