@@ -32,7 +32,7 @@ test("server-renders the CRM platform shell and metadata", async () => {
 });
 
 test("keeps local data private and does not fall back to mock records", async () => {
-  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource, sitesPlugin] = await Promise.all([
+  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource, sitesPlugin, styleSource, chartSource] = await Promise.all([
     readFile(new URL(".gitignore", root), "utf8"),
     readFile(new URL("app/lib/report-registry.ts", root), "utf8"),
     readFile(new URL("scripts/sync-local-folder.mjs", root), "utf8"),
@@ -42,6 +42,8 @@ test("keeps local data private and does not fall back to mock records", async ()
     readFile(new URL("app/lib/data-model.ts", root), "utf8"),
     readFile(new URL("app/lib/workbook-import.ts", root), "utf8"),
     readFile(new URL("build/sites-vite-plugin.ts", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+    readFile(new URL("app/components/AnalyticsCharts.tsx", root), "utf8"),
   ]);
   const reportTablesSource = await readFile(new URL("app/components/ReportTables.tsx", root), "utf8");
 
@@ -66,6 +68,10 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(workbookSource, /deduplicateCandidates/);
   assert.match(workbookSource, /keyField: "设备编号"/);
   assert.match(workbookSource, /shouldReplace/);
+  assert.match(styleSource, /Readability baseline/);
+  assert.match(styleSource, /table \{ font-size: 12px/);
+  assert.match(chartSource, /SVGRenderer/);
+  assert.match(chartSource, /renderer: "svg"/);
   assert.match(sitesPlugin, /local-snapshot\.json/);
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);

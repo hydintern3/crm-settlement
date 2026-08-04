@@ -19,8 +19,9 @@ body {
   margin: 0;
   color: var(--ink);
   background: radial-gradient(circle at 70% -10%, rgba(56,112,220,.08), transparent 30rem), var(--wash);
-  font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
-  font-size: 14px;
+  font-family: "Microsoft YaHei", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
 }
 button, input, select { font: inherit; }
 button { color: inherit; }
@@ -355,6 +356,55 @@ footer { padding: 18px 4px 2px; display: flex; justify-content: space-between; c
 .quality-list { min-height: 235px; display: grid; grid-template-columns: repeat(2,1fr); align-content: center; gap: 10px; }
 .quality-list span { min-height: 78px; padding: 18px; display: flex; flex-direction: column; justify-content: center; color: #7a8798; background: #f6f8fb; border-radius: 9px; font-size: 9px; }
 .quality-list strong { margin-bottom: 7px; color: var(--ink); font-size: 21px; }
+
+/* Readability baseline: keep operational text crisp and comfortably legible. */
+.brand-mark, .brand strong, h1, h2, .drop-zone h3 {
+  font-family: "Microsoft YaHei", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+}
+.brand span { font-size: 12px; }
+.nav-icon { font-size: 11px; }
+.sidebar nav strong { font-size: 14px; }
+.sidebar nav small { font-size: 11px; line-height: 1.35; }
+.sidebar-foot strong { font-size: 12px; }
+.sidebar-foot small { font-size: 11px; }
+.eyebrow, .section-label { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 11px; }
+h1 { font-size: 28px; }
+h2 { font-size: 18px; }
+.sync-state, .filter-tip, .clear-button { font-size: 12px; }
+.ghost-button, .primary-button { min-height: 38px; font-size: 13px; }
+.search-box { height: 40px; }
+.search-box input { font-size: 13px; }
+.filter-group legend { font-size: 12px; }
+.filter-group legend small { font-size: 11px; }
+.filter-options button { min-height: 34px; font-size: 12px; }
+.filter-options button:hover, .report-card:hover { transform: none; }
+.filter-empty { font-size: 12px; }
+.dedup-banner strong, .dedup-banner span { font-size: 12px; }
+.dedup-banner strong { font-size: 13px; }
+.dedup-banner small { font-size: 11px; line-height: 1.5; }
+.metric-top { font-size: 12px; }
+.metric-value span, .metric-card small { font-size: 11px; }
+.panel-header p, .panel-note, .chart-empty span, .panel-number span { font-size: 12px; }
+.tag, .safe-chip, .status-chip { font-size: 11px; }
+.text-button { font-size: 12px; }
+table { font-size: 12px; }
+th { padding: 12px 14px; }
+td { padding: 11px 14px; }
+.table-foot, .pager button { font-size: 12px; }
+.pager button { min-width: 72px; height: 34px; }
+.report-icon, .report-copy strong { font-size: 12px; }
+.report-copy small { font-size: 11px; line-height: 1.55; }
+footer { font-size: 11px; }
+.loading-screen p, .import-notice, .import-status { font-size: 12px; }
+.drop-zone h3 { font-size: 16px; }
+.drop-zone p, .import-footer { font-size: 12px; }
+.sheet-picker label, .business-sheet-fieldset legend { font-size: 12px; }
+.sheet-picker select { font-size: 12px; }
+.business-sheet-options strong, .sheet-chip { font-size: 12px; }
+.business-sheet-options small, .merge-warning { font-size: 11px; }
+.empty-dashboard p, .missing-module p, .plain-list { font-size: 13px; }
+.missing-fields span { font-size: 12px; }
+.quality-list span { font-size: 12px; }
 @keyframes status-pulse { to { transform: scale(1.35); opacity: .6; } }
 
 @media (max-width: 1180px) {
