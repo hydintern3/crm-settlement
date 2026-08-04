@@ -158,6 +158,11 @@ const safeRows = businessRows.slice(0, 500).map((row) => ({
   meteringRule: row["计量规则"],
   lines: 1,
   monthlyMetering: number(row["月平均计量"]),
+  discountedTariff: number(row["优惠资费"]),
+  marketingFee: number(row["增值"] || row["I 营销"]),
+  paymentCycle: row["付费周期"] || row["付款周期"] || "",
+  providerCategory: row["I 服务分类"] || "",
+  belowAuthorizedPrice: row["是否低于授权价"] || "",
 }));
 
 const snapshot = {

@@ -25,6 +25,11 @@ export function sites(): Plugin {
       root = config.root;
     },
     async closeBundle() {
+      // Local CRM snapshots are useful for desktop development but must never
+      // be copied into a publishable bundle by Vite's public-directory step.
+      await rm(resolve(root, "dist", "client", "data", "local-snapshot.json"), {
+        force: true,
+      });
       const outputDirectory = resolve(root, "dist", ".openai");
       const hostingConfig = resolve(root, ".openai", "hosting.json");
       const drizzleSource = resolve(root, "drizzle");

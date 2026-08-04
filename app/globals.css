@@ -145,7 +145,7 @@ h2 { margin-bottom: 0; font: 700 16px/1.25 "STSong", "Microsoft YaHei UI", serif
 .search-box span { color: #8a97a8; font-size: 21px; transform: rotate(-15deg); }
 .search-box input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 11px; }
 .clear-button { height: 34px; margin-left: auto; padding: 0 9px; border: 0; color: #8a6670; background: transparent; font-size: 10px; cursor: pointer; }
-.filter-grid { margin-top: 11px; display: grid; grid-template-columns: .72fr 1.65fr .9fr 1fr; gap: 9px; }
+.filter-grid { margin-top: 11px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
 .filter-group { min-width: 0; margin: 0; padding: 9px; border: 1px solid #e5eaf0; background: #fbfcfe; border-radius: 8px; }
 .filter-group legend { padding: 0 4px; color: #53647a; font-size: 10px; font-weight: 700; }
 .filter-group legend small { margin-left: 7px; color: #9aa4b1; font-size: 7px; font-weight: 400; }
@@ -262,6 +262,19 @@ tbody tr:hover { background: #f9fbfe; }
 .report-copy strong { font-size: 10px; }
 .report-copy small { margin-top: 5px; color: #8995a5; font-size: 8px; line-height: 1.45; }
 .status-chip.ready { color:#23745f;background:#e6f3ee; } .status-chip.pending { color:#98671f;background:#f8f0dc; } .status-chip.planned { color:#6c7481;background:#edf0f4; }
+.status-chip.partial { color:#245d9a;background:#e9f1fb; }
+.report-module-grid { margin-top: 13px; }
+.report-table-panel .panel-header { gap: 18px; align-items: flex-start; }
+.report-table-panel .panel-header > div { min-width: 0; }
+.report-table-panel .panel-header .status-chip { flex: 0 0 auto; }
+.report-table { margin-top: 15px; max-height: 430px; overflow: auto; }
+.report-table thead { position: sticky; top: 0; z-index: 1; }
+.report-table th { line-height: 1.35; }
+.availability-note { margin-top: 15px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; color: #7b6950; background: #faf5e9; border-radius: 7px; font-size: 9px; }
+.availability-note strong { flex: 0 0 auto; color: #8f621e; }
+.report-missing { margin-top: 12px; justify-content: flex-start; }
+.settlement-rules h2 { margin-top: 3px; }
+.settlement-rules .plain-list { margin-top: 13px; }
 footer { padding: 18px 4px 2px; display: flex; justify-content: space-between; color: #8995a5; font-size: 9px; }
 .loading-screen { min-height: 100vh; display: grid; place-content: center; justify-items: center; color: #6d7b90; }
 .loading-mark { width: 64px; height: 64px; display: grid; place-items: center; color: #fff; background: var(--navy); border-radius: 18px; font-weight: 700; letter-spacing: .08em; box-shadow: 0 15px 35px rgba(24,59,104,.22); }
@@ -366,6 +379,8 @@ footer { padding: 18px 4px 2px; display: flex; justify-content: space-between; c
   .topbar, .data-panel .panel-header { display: block; }
   .top-actions, .data-actions { margin-top: 13px; }
   .metric-grid, .report-grid { grid-template-columns: repeat(2,1fr); }
+  .filter-grid { grid-template-columns: 1fr; }
+  .report-table-panel .panel-header { display: flex; }
   .panel { padding: 15px; }
   .donut-wrap { flex-direction: column; padding-top: 20px; }
   .import-overlay { padding: 12px; }

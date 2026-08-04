@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
 import { ImportDialog } from "./components/ImportDialog";
 import { MonthlyChart, RankingChart, RuleChart } from "./components/AnalyticsCharts";
+import { BusinessReportTables, ProfitTargetTables, ProviderReportTables, ReportCatalog, SalesReportTables, SettlementReportTables } from "./components/ReportTables";
 import { buildSnapshot, EMPTY_SNAPSHOT, normalizeSnapshot, summarizeRows, type BusinessRow, type NumericValue, type Snapshot } from "./lib/data-model";
 
 const NAV_ITEMS = [
@@ -12,7 +13,7 @@ const NAV_ITEMS = [
 ] as const;
 type ViewName = (typeof NAV_ITEMS)[number][0];
 
-const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], statuses: [] as string[], rules: [] as string[], keyword: "" };
+const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], owners: [] as string[], types: [] as string[], statuses: [] as string[], rules: [] as string[], keyword: "" };
 const safeText = (value: string | null | undefined) => value?.trim() || "--";
 const numberText = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
 const moneyWan = (value: NumericValue) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value / 10000);
@@ -78,17 +79,13 @@ function Metrics({ rows }: { rows: BusinessRow[] }) {
 function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: number }) {
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));
-  useEffect(() => setPage(1), [rows]);
-  const visible = rows.slice((page - 1) * pageSize, page * pageSize);
+  const safePage = Math.min(page, pages);
+  const visible = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
   return <>
     <div className="table-scroll"><table><thead><tr><th>业务类型</th><th>业务名称</th><th>负责人</th><th>供应商</th><th>服务编号</th><th>服务简称</th><th>完工日期</th><th>活跃状态</th><th>计量规则</th><th className="number">线数</th><th className="number">月平均计量</th></tr></thead>
       <tbody>{visible.length ? visible.map((row, index) => <tr key={`${row.serviceCode}-${index}`}><td><span className={`business-chip ${/拆机/.test(row.businessType) ? "removal" : ""}`}>{safeText(row.businessType)}</span></td><td>{safeText(row.businessName)}</td><td>{safeText(row.owner)}</td><td>{safeText(row.provider)}</td><td className="code">{safeText(row.serviceCode)}</td><td>{safeText(row.serviceName)}</td><td>{safeText(row.completedDate)}</td><td><span className={`active-chip ${/不活跃|停止|暂停/.test(row.activeStatus) ? "inactive" : ""}`}>{safeText(row.activeStatus)}</span></td><td>{safeText(row.meteringRule)}</td><td className="number">{numberText(row.lines)}</td><td className="number">{row.monthlyMetering === null ? "--" : `¥ ${numberText(row.monthlyMetering, 2)}`}</td></tr>) : <tr><td className="empty-cell" colSpan={11}>--　暂无匹配数据</td></tr>}</tbody></table></div>
-    <div className="table-foot"><span>共 {rows.length} 条 · 第 {page} / {pages} 页</span><div className="pager"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><button disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>下一页</button></div></div>
+    <div className="table-foot"><span>共 {rows.length} 条 · 第 {safePage} / {pages} 页</span><div className="pager"><button disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))}>上一页</button><button disabled={safePage >= pages} onClick={() => setPage(Math.min(pages, safePage + 1))}>下一页</button></div></div>
   </>;
-}
-
-function MissingModule({ title, fields }: { title: string; fields: string[] }) {
-  return <section className="module-grid"><Panel label="DATA AVAILABILITY" title={title}><div className="missing-module"><strong>--</strong><p>当前数据不足，系统不会生成模拟数。</p><div className="missing-fields">{fields.map((field) => <span key={field}>{field}</span>)}</div></div></Panel><Panel label="NEXT INPUT" title="补齐后可启用"><ul className="plain-list"><li>按规则版本计算并保留输入、输出与人工调整记录</li><li>对差异和异常只做标记，不自动确认正式金额</li><li>敏感或已清空字段不会被推断和补齐</li></ul></Panel></section>;
 }
 
 export default function Home() {
@@ -99,10 +96,9 @@ export default function Home() {
   const deferredKeyword = useDeferredValue(filters.keyword.trim().toLowerCase());
 
   useEffect(() => {
-    const fromHash = decodeURIComponent(window.location.hash.slice(1)) as ViewName;
-    if (NAV_ITEMS.some(([name]) => name === fromHash)) setActiveNav(fromHash);
     const listener = () => { const next = decodeURIComponent(window.location.hash.slice(1)) as ViewName; if (NAV_ITEMS.some(([name]) => name === next)) setActiveNav(next); };
     window.addEventListener("hashchange", listener);
+    queueMicrotask(listener);
     fetch("/data/local-snapshot.json", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => setSnapshot(normalizeSnapshot(data))).catch(() => setSnapshot(EMPTY_SNAPSHOT));
     return () => window.removeEventListener("hashchange", listener);
   }, []);
@@ -110,37 +106,42 @@ export default function Home() {
   const filteredRows = useMemo(() => (snapshot?.rows ?? []).filter((row) => {
     const [year, month] = row.completedDate.split("-");
     return (!filters.years.length || filters.years.includes(year)) && (!filters.months.length || filters.months.includes(month)) &&
+      (!filters.owners.length || filters.owners.includes(row.owner)) && (!filters.types.length || filters.types.includes(row.businessType)) &&
       (!filters.statuses.length || filters.statuses.includes(row.activeStatus)) && (!filters.rules.length || filters.rules.includes(row.meteringRule)) &&
       (!deferredKeyword || [row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName].join(" ").toLowerCase().includes(deferredKeyword));
-  }), [snapshot, filters.years, filters.months, filters.statuses, filters.rules, deferredKeyword]);
+  }), [snapshot, filters.years, filters.months, filters.owners, filters.types, filters.statuses, filters.rules, deferredKeyword]);
   const analysis = useMemo(() => buildSnapshot(filteredRows, snapshot?.source ?? EMPTY_SNAPSHOT.source, snapshot?.mode ?? "empty"), [filteredRows, snapshot?.source, snapshot?.mode]);
 
   if (!snapshot) return <main className="loading-screen"><div className="loading-mark">CRM</div><p>正在建立业务分析视图…</p></main>;
   const years = [...new Set(snapshot.rows.map((row) => row.completedDate.slice(0, 4)).filter((value) => /^\d{4}$/.test(value)))].sort().reverse();
   const statuses = [...new Set(snapshot.rows.map((row) => row.activeStatus).filter(Boolean))].sort();
   const rules = [...new Set(snapshot.rows.map((row) => row.meteringRule).filter(Boolean))].sort();
+  const owners = [...new Set(snapshot.rows.map((row) => row.owner).filter(Boolean))].sort();
+  const businessTypes = [...new Set(snapshot.rows.map((row) => row.businessType).filter(Boolean))].sort();
   const updated = snapshot.mode === "empty" ? "--" : new Date(snapshot.generatedAt).toLocaleString("zh-CN", { hour12: false });
 
   function navigate(name: ViewName) { setActiveNav(name); window.history.replaceState(null, "", `#${encodeURIComponent(name)}`); }
   function selectRule(name: string) { setFilters((value) => ({ ...value, rules: [name] })); navigate("统一查询"); }
-  function selectRank(name: string, field: "owner" | "provider") { setFilters((value) => ({ ...value, keyword: name })); navigate(field === "owner" ? "销售分析" : "服务商分析"); }
+  function selectRank(name: string, field: "owner" | "provider") { setFilters((value) => field === "owner" ? ({ ...value, owners: [name] }) : ({ ...value, keyword: name })); navigate(field === "owner" ? "销售分析" : "服务商分析"); }
 
   const filterBar = <section className="filter-bar"><div className="filter-toolbar"><label className="search-box"><span>⌕</span><input value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} placeholder="搜索负责人、供应商、服务编号…" /></label><span className="filter-tip">点击可多选，长按约半秒切换为单选</span><button className="clear-button" onClick={() => setFilters({ ...EMPTY_FILTERS })}>重置筛选</button></div><div className="filter-grid">
-    <MultiSelectGrid label="年份" options={years} selected={filters.years} onChange={(years) => setFilters((value) => ({ ...value, years }))} />
-    <MultiSelectGrid label="月份" options={Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"))} selected={filters.months} onChange={(months) => setFilters((value) => ({ ...value, months }))} />
-    <MultiSelectGrid label="状态" options={statuses} selected={filters.statuses} onChange={(statuses) => setFilters((value) => ({ ...value, statuses }))} />
+    <MultiSelectGrid label="完工年份" options={years} selected={filters.years} onChange={(years) => setFilters((value) => ({ ...value, years }))} />
+    <MultiSelectGrid label="完工月份" options={Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"))} selected={filters.months} onChange={(months) => setFilters((value) => ({ ...value, months }))} />
+    <MultiSelectGrid label="负责人" options={owners} selected={filters.owners} onChange={(owners) => setFilters((value) => ({ ...value, owners }))} />
+    <MultiSelectGrid label="业务属性" options={businessTypes} selected={filters.types} onChange={(types) => setFilters((value) => ({ ...value, types }))} />
+    <MultiSelectGrid label="活跃状态" options={statuses} selected={filters.statuses} onChange={(statuses) => setFilters((value) => ({ ...value, statuses }))} />
     <MultiSelectGrid label="计量规则" options={rules} selected={filters.rules} onChange={(rules) => setFilters((value) => ({ ...value, rules }))} />
   </div></section>;
 
   let content: React.ReactNode;
   if (activeNav === "总览") content = <><Metrics rows={filteredRows} /><section className="dashboard-grid"><Panel label="MONTHLY TREND" title="月平均计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="METERING RULE" title="计量规则分布" aside={<span className="tag">点击可下钻</span>}><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel><Panel label="SALES PERFORMANCE" title="负责人业绩"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="PROVIDER RANKING" title="服务商进单"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "provider")} /></Panel></section></>;
   else if (activeNav === "统一查询") content = <Panel label="DETAIL QUERY" title="业务明细" aside={<button className="primary-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出筛选结果</button>}><p className="panel-note">筛选、分页和导出均基于当前真实数据；空字段统一显示为 --。</p><DataTable rows={filteredRows} /></Panel>;
-  else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section></>;
-  else if (activeNav === "销售分析") content = <section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section>;
-  else if (activeNav === "服务商分析") content = <section className="module-grid"><Panel label="PROVIDER RANKING" title="服务商进单排名"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "provider")} /></Panel><Panel label="PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section>;
-  else if (activeNav === "毛利与目标") content = <MissingModule title="毛利与目标数据" fields={["年度/月度目标", "采购成本", "服务费政策", "毛利确认口径"]} />;
-  else if (activeNav === "结算中心") content = <><Metrics rows={filteredRows} /><MissingModule title="正式结算闭环" fields={["实际账单", "应收/应付", "收款/付款", "销账与发票状态"]} /></>;
-  else content = <section className="module-grid"><Panel label="SOURCE" title="当前数据来源"><div className="source-card"><strong>{snapshot.source.label}</strong><span>{snapshot.source.currentFile}</span><small>{snapshot.source.files.length ? snapshot.source.files.join("、") : "--"}</small><button className="primary-button" onClick={() => setShowImport(true)}>重新导入</button></div></Panel><Panel label="QUALITY" title="数据可用性"><div className="quality-list"><span><strong>{numberText(snapshot.summary.total)}</strong> 去重后业务记录</span><span><strong>{snapshot.source.sheets?.length ?? (snapshot.mode === "empty" ? "--" : 1)}</strong> 已识别工作表</span><span><strong>{snapshot.source.deduplication?.removedRows ?? "--"}</strong> 设备重复记录已排除</span><span><strong>{snapshot.source.deduplication?.blankKeyRows ?? "--"}</strong> 设备编号为空</span><span><strong>{numberText(snapshot.summary.review)}</strong> 待人工复核</span><span><strong>0</strong> mock 数据</span></div></Panel>{snapshot.source.sheets?.length ? <Panel label="SHEETS" title="工作表识别结果" className="wide-panel"><div className="sheet-summary">{snapshot.source.sheets.map((sheet) => <span key={`${sheet.fileName}-${sheet.sheetName}`} className={`sheet-chip ${sheet.kind}`}>{sheet.fileName} / {sheet.sheetName} · {sheet.rowCount} 行</span>)}</div></Panel> : null}</section>;
+  else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section><BusinessReportTables rows={filteredRows} /></>;
+  else if (activeNav === "销售分析") content = <><section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SalesReportTables rows={filteredRows} /></>;
+  else if (activeNav === "服务商分析") content = <><section className="module-grid"><Panel label="PROVIDER RANKING" title="服务商进单排名"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "provider")} /></Panel><Panel label="PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><ProviderReportTables rows={filteredRows} /></>;
+  else if (activeNav === "毛利与目标") content = <ProfitTargetTables />;
+  else if (activeNav === "结算中心") content = <><Metrics rows={filteredRows} /><SettlementReportTables /></>;
+  else content = <section className="module-grid"><Panel label="SOURCE" title="当前数据来源"><div className="source-card"><strong>{snapshot.source.label}</strong><span>{snapshot.source.currentFile}</span><small>{snapshot.source.files.length ? snapshot.source.files.join("、") : "--"}</small><button className="primary-button" onClick={() => setShowImport(true)}>重新导入</button></div></Panel><Panel label="QUALITY" title="数据可用性"><div className="quality-list"><span><strong>{numberText(snapshot.summary.total)}</strong> 去重后业务记录</span><span><strong>{snapshot.source.sheets?.length ?? (snapshot.mode === "empty" ? "--" : 1)}</strong> 已识别工作表</span><span><strong>{snapshot.source.deduplication?.removedRows ?? "--"}</strong> 设备重复记录已排除</span><span><strong>{snapshot.source.deduplication?.blankKeyRows ?? "--"}</strong> 设备编号为空</span><span><strong>{numberText(snapshot.summary.review)}</strong> 待人工复核</span><span><strong>0</strong> mock 数据</span></div></Panel>{snapshot.source.sheets?.length ? <Panel label="SHEETS" title="工作表识别结果" className="wide-panel"><div className="sheet-summary">{snapshot.source.sheets.map((sheet) => <span key={`${sheet.fileName}-${sheet.sheetName}`} className={`sheet-chip ${sheet.kind}`}>{sheet.fileName} / {sheet.sheetName} · {sheet.rowCount} 行</span>)}</div></Panel> : null}<ReportCatalog /></section>;
 
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">衡</div><div><strong>衡析</strong><span>CRM 业务分析平台</span></div></div><nav>{NAV_ITEMS.map(([name, description], index) => <button key={name} className={activeNav === name ? "active" : ""} onClick={() => navigate(name)}><span className="nav-icon">{String(index + 1).padStart(2, "0")}</span><span><strong>{name}</strong><small>{description}</small></span></button>)}</nav><div className="sidebar-foot"><i className={snapshot.mode === "empty" ? "empty" : ""} /><div><strong>{snapshot.mode === "empty" ? "等待导入数据" : "数据已连接"}</strong><small>{snapshot.source.currentFile}</small></div></div></aside>
     <main className="main"><header className="topbar"><div><p className="eyebrow">BUSINESS INTELLIGENCE · 2026</p><h1>{activeNav}</h1></div><div className="top-actions"><span className="sync-state">数据更新：{updated}</span><button className="ghost-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出当前数据</button><button className="primary-button" onClick={() => setShowImport(true)}>＋ 导入数据</button></div></header>{filterBar}{snapshot.source.deduplication && <div className="dedup-banner"><div><strong>已按设备编号去重</strong><span>输入 {snapshot.source.deduplication.inputRows} 条，保留 {snapshot.source.deduplication.outputRows} 条，排除 {snapshot.source.deduplication.removedRows} 条重复记录。</span></div><small>{snapshot.source.deduplication.strategy}</small></div>}{snapshot.mode === "empty" && <AnalyticsPlaceholder onImport={() => setShowImport(true)} />}{snapshot.mode !== "empty" && content}<footer><span>缺失数据统一显示 -- · 不推断脱敏或已清空字段 · 结算结果仅供内部工作分流</span><span>BH 逻辑只读取结果，不回写原始公式</span></footer></main>

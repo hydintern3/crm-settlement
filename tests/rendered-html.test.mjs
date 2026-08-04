@@ -32,7 +32,7 @@ test("server-renders the CRM platform shell and metadata", async () => {
 });
 
 test("keeps local data private and does not fall back to mock records", async () => {
-  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource] = await Promise.all([
+  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource, sitesPlugin] = await Promise.all([
     readFile(new URL(".gitignore", root), "utf8"),
     readFile(new URL("app/lib/report-registry.ts", root), "utf8"),
     readFile(new URL("scripts/sync-local-folder.mjs", root), "utf8"),
@@ -41,7 +41,9 @@ test("keeps local data private and does not fall back to mock records", async ()
     readFile(new URL("app/components/ImportDialog.tsx", root), "utf8"),
     readFile(new URL("app/lib/data-model.ts", root), "utf8"),
     readFile(new URL("app/lib/workbook-import.ts", root), "utf8"),
+    readFile(new URL("build/sites-vite-plugin.ts", root), "utf8"),
   ]);
+  const reportTablesSource = await readFile(new URL("app/components/ReportTables.tsx", root), "utf8");
 
   assert.match(gitignore, /public\/data\/local-snapshot\.json/);
   assert.match(registry, /REPORTS/);
@@ -57,9 +59,24 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(importSource, /businessIds/);
   assert.match(dataModelSource, /初始完工日期/);
   assert.match(dataModelSource, /const month = row\.completedDate/);
+  assert.match(dataModelSource, /buildMonthlyBusiness/);
+  assert.match(dataModelSource, /buildNetGrowth/);
+  assert.match(dataModelSource, /discountedTariff/);
   assert.match(workbookSource, /flatMap/);
   assert.match(workbookSource, /deduplicateCandidates/);
   assert.match(workbookSource, /keyField: "设备编号"/);
   assert.match(workbookSource, /shouldReplace/);
+  assert.match(sitesPlugin, /local-snapshot\.json/);
+  assert.match(pageSource, /BusinessReportTables/);
+  assert.match(pageSource, /SalesReportTables/);
+  assert.match(pageSource, /ProviderReportTables/);
+  assert.match(pageSource, /ProfitTargetTables/);
+  assert.match(pageSource, /SettlementReportTables/);
+  assert.match(reportTablesSource, /不生成模拟金额/);
+  assert.match(reportTablesSource, /全年业务拆装情况/);
+  assert.match(reportTablesSource, /服务商拆机排名/);
+  assert.match(reportTablesSource, /结算按业务汇总/);
+  assert.doesNotMatch(reportTablesSource, /身份证号码|银行卡号|手机号码/);
   await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));
+  await assert.rejects(access(new URL("dist/client/data/local-snapshot.json", root)));
 });
