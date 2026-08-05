@@ -12,6 +12,28 @@ export type ReportDefinition = {
 
 export const REPORTS: ReportDefinition[] = [
   {
+    id: "data-quality",
+    name: "数据质量与日期兜底",
+    description: "设备唯一键、日期缺失、兜底来源与顺序异常",
+    dataset: "business",
+    dimensions: ["设备编号", "日期来源", "负责人"],
+    metrics: ["缺失数", "重复数", "兜底数"],
+    status: "ready",
+    short: "质量",
+    tone: "green",
+  },
+  {
+    id: "completion-cohort",
+    name: "完工批次留存分析",
+    description: "按有效完工月份分析当前活跃、拆机与计量留存",
+    dataset: "business",
+    dimensions: ["有效完工月份", "活跃状态"],
+    metrics: ["完工线数", "活跃率", "月平均计量"],
+    status: "ready",
+    short: "留存",
+    tone: "blue",
+  },
+  {
     id: "annual-install-removal",
     name: "全年业务拆装情况",
     description: "月度新装、拆机、活跃、计量与拆装比",

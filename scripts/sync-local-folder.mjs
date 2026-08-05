@@ -122,7 +122,7 @@ const monthlyMap = new Map(
 );
 
 for (const row of businessRows) {
-  const date = normalizedDate(row["完工日期"] || row["初始完工日期"]);
+  const date = normalizedDate(row["初始完工日期"] || row["完工日期"]);
   if (!date.startsWith("2026-")) continue;
   const month = date.slice(5, 7);
   const item = monthlyMap.get(month);
@@ -145,7 +145,10 @@ for (const row of businessRows) {
   ruleCounts.set(rule, (ruleCounts.get(rule) || 0) + 1);
 }
 
-const safeRows = businessRows.slice(0, 500).map((row) => ({
+const safeRows = businessRows.slice(0, 500).map((row) => {
+  const initialCompletedDate = normalizedDate(row["初始完工日期"]);
+  const rawCompletedDate = normalizedDate(row["完工日期"]);
+  return ({
   businessType: row["业务属性"],
   businessName: row["业务名称"],
   owner: row["负责人"],
@@ -153,7 +156,10 @@ const safeRows = businessRows.slice(0, 500).map((row) => ({
   deviceCode: row["设备编号"],
   serviceCode: row["I 服务编号"],
   serviceName: row["I 服务简称"],
-  completedDate: normalizedDate(row["完工日期"] || row["初始完工日期"]),
+  initialCompletedDate,
+  rawCompletedDate,
+  completedDate: initialCompletedDate || rawCompletedDate,
+  completionDateSource: initialCompletedDate ? "初始完工日期" : rawCompletedDate ? "完工日期兜底" : "缺失",
   activeStatus: row["活跃状态"],
   meteringRule: row["计量规则"],
   lines: 1,
@@ -163,7 +169,7 @@ const safeRows = businessRows.slice(0, 500).map((row) => ({
   paymentCycle: row["付费周期"] || row["付款周期"] || "",
   providerCategory: row["I 服务分类"] || "",
   belowAuthorizedPrice: row["是否低于授权价"] || "",
-}));
+}); });
 
 const snapshot = {
   mode: "local",

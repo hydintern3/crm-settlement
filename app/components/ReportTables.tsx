@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import {
+  buildCompletionCohorts,
+  buildDataQualityMetrics,
   buildMonthlyBusiness,
   buildNetGrowth,
   buildPerformance,
@@ -64,6 +66,16 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
     quarterRatio: "--",
     annualRatio: "--",
   }));
+  const cohorts = buildCompletionCohorts(rows).map((item) => ({
+    key: item.month,
+    month: item.month,
+    lines: number(item.lines),
+    activeLines: number(item.activeLines),
+    removalLines: number(item.removalLines),
+    activeRate: percent(item.activeRate),
+    amount: money(item.monthlyMetering),
+    activeAmount: money(item.activeMonthlyMetering),
+  }));
   return <section className="module-grid report-module-grid">
     <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description="完工年月来自当前筛选记录；目标与历史时点活跃口径尚未提供，保持 --。">
       <ReportTable columns={[
@@ -73,6 +85,13 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
         { key: "annualTarget", label: "全年目标", numeric: true }, { key: "annualCompletion", label: "全年完成比", numeric: true }, { key: "ratio", label: "月度拆装比", numeric: true },
         { key: "quarterRatioTarget", label: "季度拆装比目标", numeric: true }, { key: "quarterRatio", label: "季度拆装比", numeric: true }, { key: "annualRatio", label: "全年拆装比", numeric: true },
       ]} rows={monthly} />
+    </ReportPanel>
+    <ReportPanel wide label="COMPLETION COHORT" title="完工批次留存分析" description="按有效完工月份形成批次；有效完工日期优先取初始完工日期，缺失时使用完工日期兜底。">
+      <ReportTable columns={[
+        { key: "month", label: "有效完工月份" }, { key: "lines", label: "完工线数", numeric: true }, { key: "activeLines", label: "当前活跃线数", numeric: true },
+        { key: "removalLines", label: "拆机线数", numeric: true }, { key: "activeRate", label: "当前活跃率", numeric: true },
+        { key: "amount", label: "月平均计量", numeric: true }, { key: "activeAmount", label: "活跃月平均计量", numeric: true },
+      ]} rows={cohorts} />
     </ReportPanel>
   </section>;
 }
@@ -108,7 +127,28 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     const removed = group.filter(isRemoval);
     return { key: category, category, lines: number(group.length), amount: money(group.reduce((sum, row) => sum + (row.monthlyMetering ?? 0), 0)), removalRate: percent(group.length ? (removed.length / group.length) * 100 : null), note: "服务分类取源表原值" };
   });
+  const services = new Map<string, BusinessRow[]>();
+  for (const row of rows) if (row.serviceCode) services.set(row.serviceCode, [...(services.get(row.serviceCode) ?? []), row]);
+  const providerOverview = [...services.entries()].map(([code, group]) => {
+    const removals = group.filter(isRemoval);
+    const active = group.filter((row) => /活跃|正常/.test(row.activeStatus) && !/不活跃|停止|暂停/.test(row.activeStatus));
+    const lines = group.reduce((sum, row) => sum + (row.lines ?? 1), 0);
+    const removalLines = removals.reduce((sum, row) => sum + (row.lines ?? 1), 0);
+    return {
+      key: code,
+      code,
+      name: group.find((row) => row.serviceName)?.serviceName || "--",
+      lines: number(lines),
+      activeLines: number(active.reduce((sum, row) => sum + (row.lines ?? 1), 0)),
+      removalLines: number(removalLines),
+      amount: money(group.reduce((sum, row) => sum + (row.monthlyMetering ?? 0), 0)),
+      removalRate: percent(lines ? (removalLines / lines) * 100 : null),
+    };
+  }).sort((left, right) => Number(String(right.lines).replace(/,/g, "")) - Number(String(left.lines).replace(/,/g, "")));
   return <section className="module-grid report-module-grid">
+    <ReportPanel wide label="PROVIDER OVERVIEW" title="服务商综合分布" description="按 I 服务编号汇总进单、当前活跃、拆机、计量与拆机率，便于在同一张表比较规模和留存。">
+      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "总线数", numeric: true }, { key: "activeLines", label: "活跃线数", numeric: true }, { key: "removalLines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }]} rows={providerOverview} />
+    </ReportPanel>
     <ReportPanel label="TOP 10 PROVIDERS" title="服务商进单排名" description="按 I 服务编号汇总当前筛选记录，排名依据月平均计量。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(false)} />
     </ReportPanel>
@@ -117,6 +157,27 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     </ReportPanel>
     <ReportPanel wide label="PROVIDER CATEGORY" title="年拆机服务商分类占比" status="partial" description="服务分类当前可能因脱敏而全部为空；系统不会自动补齐。">
       <ReportTable columns={[{ key: "category", label: "I 服务分类" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "note", label: "备注" }]} rows={categoryRows} emptyText="服务分类为空或当前筛选无记录" />
+    </ReportPanel>
+  </section>;
+}
+
+export function DataQualityReportTables({ rows }: { rows: BusinessRow[] }) {
+  const metrics = buildDataQualityMetrics(rows);
+  const auditRows = rows.filter((row) => row.completionDateSource !== "初始完工日期").map((row, index) => ({
+    key: `${row.deviceCode || "blank"}-${index}`,
+    serviceCode: row.serviceCode || "--",
+    owner: row.owner || "--",
+    initialDate: row.initialCompletedDate || "--",
+    rawDate: row.rawCompletedDate || "--",
+    effectiveDate: row.completedDate || "--",
+    source: row.completionDateSource,
+  }));
+  return <section className="module-grid report-module-grid">
+    <ReportPanel wide label="DATA QUALITY" title="数据质量检查" description="检查设备唯一键和日期完整性；只输出异常，不修改源数据。">
+      <div className="quality-metric-grid">{metrics.map((metric) => <div className={`quality-metric ${metric.status}`} key={metric.key}><span>{metric.label}</span><strong>{number(metric.value)}</strong><small>{metric.description}</small></div>)}</div>
+    </ReportPanel>
+    <ReportPanel wide label="DATE FALLBACK AUDIT" title="完工日期兜底审计" description="仅展示未使用初始完工日期的记录，便于核对有效日期来源。">
+      <ReportTable columns={[{ key: "serviceCode", label: "I 服务编号" }, { key: "owner", label: "负责人" }, { key: "initialDate", label: "初始完工日期" }, { key: "rawDate", label: "完工日期" }, { key: "effectiveDate", label: "有效完工日期" }, { key: "source", label: "日期来源" }]} rows={auditRows} emptyText="当前记录均使用初始完工日期，无兜底或缺失记录" />
     </ReportPanel>
   </section>;
 }

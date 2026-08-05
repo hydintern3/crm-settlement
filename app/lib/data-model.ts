@@ -8,7 +8,10 @@ export type BusinessRow = {
   deviceCode: string;
   serviceCode: string;
   serviceName: string;
+  initialCompletedDate: string;
+  rawCompletedDate: string;
   completedDate: string;
+  completionDateSource: "初始完工日期" | "完工日期兜底" | "缺失";
   activeStatus: string;
   meteringRule: string;
   lines: NumericValue;
@@ -51,6 +54,24 @@ export type NetGrowthRow = {
   netLines: number;
   netAmount: NumericValue;
   installRemovalRatio: NumericValue;
+};
+
+export type CompletionCohortRow = {
+  month: string;
+  lines: number;
+  activeLines: number;
+  removalLines: number;
+  activeRate: NumericValue;
+  monthlyMetering: NumericValue;
+  activeMonthlyMetering: NumericValue;
+};
+
+export type DataQualityMetric = {
+  key: string;
+  label: string;
+  value: number;
+  status: "pass" | "review";
+  description: string;
 };
 
 export type RankedItem = {
@@ -159,6 +180,9 @@ function first(row: RawRow, names: string[]) {
 }
 
 export function toBusinessRow(row: RawRow): BusinessRow {
+  const initialCompletedDate = dateValue(first(row, ["初始完工日期"]));
+  const rawCompletedDate = dateValue(first(row, ["完工日期"]));
+  const completedDate = initialCompletedDate || rawCompletedDate;
   return {
     businessType: textValue(first(row, ["业务属性", "业务类型"])),
     businessName: textValue(first(row, ["业务名称", "产品名称"])),
@@ -167,7 +191,10 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     deviceCode: textValue(first(row, ["设备编号", "设备号"])),
     serviceCode: textValue(first(row, ["I服务编号", "I 服务编号", "服务编号"])),
     serviceName: textValue(first(row, ["I服务简称", "I 服务简称", "服务简称"])),
-    completedDate: dateValue(first(row, ["完工日期", "初始完工日期", "最终完工日期", "业务完工日期", "开通日期"])),
+    initialCompletedDate,
+    rawCompletedDate,
+    completedDate,
+    completionDateSource: initialCompletedDate ? "初始完工日期" : rawCompletedDate ? "完工日期兜底" : "缺失",
     activeStatus: textValue(first(row, ["活跃状态", "服务状态"])),
     meteringRule: textValue(first(row, ["计量规则"])),
     lines: numericValue(first(row, ["线数", "数量"])),
@@ -303,6 +330,44 @@ export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
   }).sort((left, right) => right.netLines - left.netLines);
 }
 
+export function buildCompletionCohorts(rows: BusinessRow[]): CompletionCohortRow[] {
+  const groups = new Map<string, BusinessRow[]>();
+  for (const row of rows) {
+    const month = row.completedDate.match(/^(\d{4}-\d{2})/)?.[1];
+    if (month) groups.set(month, [...(groups.get(month) ?? []), row]);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, group]) => {
+    const active = group.filter(isActive);
+    const removals = group.filter(isRemoval);
+    const lines = group.reduce((sum, row) => sum + lineCount(row), 0);
+    const activeLines = active.reduce((sum, row) => sum + lineCount(row), 0);
+    return {
+      month,
+      lines,
+      activeLines,
+      removalLines: removals.reduce((sum, row) => sum + lineCount(row), 0),
+      activeRate: lines ? (activeLines / lines) * 100 : null,
+      monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
+      activeMonthlyMetering: sumKnown(active.map((row) => row.monthlyMetering)),
+    };
+  });
+}
+
+export function buildDataQualityMetrics(rows: BusinessRow[]): DataQualityMetric[] {
+  const deviceCounts = new Map<string, number>();
+  for (const row of rows) if (row.deviceCode) deviceCounts.set(row.deviceCode, (deviceCounts.get(row.deviceCode) ?? 0) + 1);
+  const duplicateRows = [...deviceCounts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
+  const metrics: DataQualityMetric[] = [
+    { key: "device-missing", label: "设备编号缺失", value: rows.filter((row) => !row.deviceCode).length, status: "pass", description: "设备编号是跨期唯一业务键" },
+    { key: "device-duplicate", label: "设备编号重复记录", value: duplicateRows, status: "pass", description: "当前筛选结果内按设备编号检查" },
+    { key: "initial-date-missing", label: "初始完工日期缺失", value: rows.filter((row) => !row.initialCompletedDate).length, status: "pass", description: "缺失时允许使用完工日期兜底" },
+    { key: "date-fallback", label: "完工日期兜底", value: rows.filter((row) => row.completionDateSource === "完工日期兜底").length, status: "pass", description: "已纳入年月、趋势和留存统计" },
+    { key: "effective-date-missing", label: "有效完工日期缺失", value: rows.filter((row) => !row.completedDate).length, status: "pass", description: "初始完工日期和完工日期均为空" },
+    { key: "date-order", label: "完工日期早于初始完工日期", value: rows.filter((row) => row.initialCompletedDate && row.rawCompletedDate && row.rawCompletedDate < row.initialCompletedDate).length, status: "pass", description: "日期顺序异常需人工复核" },
+  ];
+  return metrics.map((metric) => ({ ...metric, status: metric.value ? "review" : "pass" }));
+}
+
 export function summarizeRows(rows: BusinessRow[]) {
   if (!rows.length) return EMPTY_SNAPSHOT.summary;
   return {
@@ -349,8 +414,16 @@ export function buildSnapshot(
 }
 
 export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
-  const rows = Array.isArray(input.rows) ? input.rows.map((row) => ({
+  const rows = Array.isArray(input.rows) ? input.rows.map((row) => {
+    const initialCompletedDate = row.initialCompletedDate ?? "";
+    const rawCompletedDate = row.rawCompletedDate ?? (initialCompletedDate ? "" : row.completedDate ?? "");
+    const completedDate = initialCompletedDate || rawCompletedDate;
+    return ({
     ...row,
+    initialCompletedDate,
+    rawCompletedDate,
+    completedDate,
+    completionDateSource: initialCompletedDate ? "初始完工日期" as const : rawCompletedDate ? "完工日期兜底" as const : "缺失" as const,
     provider: row.provider ?? "",
     deviceCode: row.deviceCode ?? "",
     lines: row.lines === undefined ? null : row.lines,
@@ -360,7 +433,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     paymentCycle: row.paymentCycle ?? "",
     providerCategory: row.providerCategory ?? "",
     belowAuthorizedPrice: row.belowAuthorizedPrice ?? "",
-  })) : [];
+  }); }) : [];
   if (!rows.length) return EMPTY_SNAPSHOT;
   return buildSnapshot(rows, input.source ?? { label: "本地快照", files: [], currentFile: "--" }, input.mode === "imported" ? "imported" : "local");
 }

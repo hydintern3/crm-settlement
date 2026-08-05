@@ -60,6 +60,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(importSource, /\.xlsb/);
   assert.match(importSource, /businessIds/);
   assert.match(dataModelSource, /初始完工日期/);
+  assert.match(dataModelSource, /initialCompletedDate \|\| rawCompletedDate/);
+  assert.match(dataModelSource, /buildCompletionCohorts/);
+  assert.match(dataModelSource, /buildDataQualityMetrics/);
   assert.match(dataModelSource, /const month = row\.completedDate/);
   assert.match(dataModelSource, /buildMonthlyBusiness/);
   assert.match(dataModelSource, /buildNetGrowth/);
@@ -80,6 +83,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /SettlementReportTables/);
   assert.match(reportTablesSource, /不生成模拟金额/);
   assert.match(reportTablesSource, /全年业务拆装情况/);
+  assert.match(reportTablesSource, /完工批次留存分析/);
+  assert.match(reportTablesSource, /完工日期兜底审计/);
+  assert.match(reportTablesSource, /服务商综合分布/);
   assert.match(reportTablesSource, /服务商拆机排名/);
   assert.match(reportTablesSource, /结算按业务汇总/);
   assert.doesNotMatch(reportTablesSource, /身份证号码|银行卡号|手机号码/);
