@@ -273,6 +273,17 @@ tbody tr:hover { background: #f9fbfe; }
 .report-table th { line-height: 1.35; }
 .availability-note { margin-top: 15px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; color: #7b6950; background: #faf5e9; border-radius: 7px; font-size: 9px; }
 .availability-note strong { flex: 0 0 auto; color: #8f621e; }
+.dimension-tabs { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.dimension-tabs button { min-height: 34px; padding: 0 14px; border: 1px solid #dfe5ed; color: #53647a; background: #fff; border-radius: 7px; font-size: 12px; cursor: pointer; }
+.dimension-tabs button:hover { border-color: #b9c9dd; background: #f7f9fc; }
+.dimension-tabs button.active { color: #fff; border-color: var(--blue); background: var(--blue); box-shadow: 0 5px 12px rgba(39,100,231,.16); }
+.calculation-grid { margin-top: 16px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.calculation-grid label { min-width: 0; display: grid; gap: 6px; color: #596980; font-size: 12px; font-weight: 600; }
+.calculation-grid input, .calculation-grid select { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #dfe5ed; color: #35465f; background: #fff; border-radius: 7px; font: 400 12px/1 "Microsoft YaHei UI", sans-serif; }
+.calculation-grid input:focus, .calculation-grid select:focus { border-color: #7da3db; outline: 3px solid rgba(39,100,231,.09); }
+.rule-audit { margin-top: 15px; padding: 11px 12px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; color: #6e7c8e; background: #f6f8fb; border-radius: 8px; font-size: 12px; }
+.rule-audit span { min-width: 0; display: grid; gap: 3px; }
+.rule-audit strong { color: #263d5d; font-size: 14px; overflow-wrap: anywhere; }
 .report-missing { margin-top: 12px; justify-content: flex-start; }
 .settlement-rules h2 { margin-top: 3px; }
 .settlement-rules .plain-list { margin-top: 13px; }
@@ -454,4 +465,5 @@ footer { font-size: 11px; }
   .dedup-banner { align-items: flex-start; flex-direction: column; gap: 6px; }
   .dedup-banner small { text-align: left; }
   .quality-metric-grid { grid-template-columns: 1fr; }
+  .calculation-grid, .rule-audit { grid-template-columns: 1fr; }
 }

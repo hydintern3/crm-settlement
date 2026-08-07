@@ -8,12 +8,16 @@ export type BusinessRow = {
   deviceCode: string;
   serviceCode: string;
   serviceName: string;
+  serviceCodeII: string;
+  serviceNameII: string;
   initialCompletedDate: string;
   rawCompletedDate: string;
   completedDate: string;
   completionDateSource: "初始完工日期" | "完工日期兜底" | "缺失";
   activeStatus: string;
   meteringRule: string;
+  sourceMeteringRule: string;
+  calculationRuleSource: "CRM静态结果" | "平台动态计算";
   lines: NumericValue;
   monthlyMetering: NumericValue;
   discountedTariff: NumericValue;
@@ -21,6 +25,30 @@ export type BusinessRow = {
   paymentCycle: string;
   providerCategory: string;
   belowAuthorizedPrice: string;
+  grossProfit: NumericValue;
+};
+
+export type CalculationRuleConfig = {
+  enabled: boolean;
+  version: string;
+  baseDate: string;
+  incrementalYear: number;
+  newVolumeMonths: number;
+  overdueMonths: number;
+  removalRateDenominator: "total" | "installs";
+};
+
+export type BusinessProgressRow = {
+  key: string;
+  label: string;
+  totalLines: number;
+  installs: number;
+  removals: number;
+  removalRate: NumericValue;
+  netGrowth: number;
+  monthlyMetering: NumericValue;
+  newGrossProfit: NumericValue;
+  stockGrossProfit: NumericValue;
 };
 
 export type PerformanceRow = {
@@ -120,6 +148,7 @@ export type Snapshot = {
   meteringRules: Array<{ label: string; value: number; color: string }>;
   owners: RankedItem[];
   providers: RankedItem[];
+  providersII: RankedItem[];
   rows: BusinessRow[];
 };
 
@@ -141,6 +170,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   meteringRules: [],
   owners: [],
   providers: [],
+  providersII: [],
   rows: [],
 };
 
@@ -183,20 +213,25 @@ export function toBusinessRow(row: RawRow): BusinessRow {
   const initialCompletedDate = dateValue(first(row, ["初始完工日期"]));
   const rawCompletedDate = dateValue(first(row, ["完工日期"]));
   const completedDate = initialCompletedDate || rawCompletedDate;
+  const sourceMeteringRule = textValue(first(row, ["计量规则"]));
   return {
     businessType: textValue(first(row, ["业务属性", "业务类型"])),
     businessName: textValue(first(row, ["业务名称", "产品名称"])),
     owner: textValue(first(row, ["负责人", "销售负责人", "客户经理"])),
-    provider: textValue(first(row, ["供应商", "服务商", "服务提供商"])),
+    provider: textValue(first(row, ["供应商", "供应商名称"])),
     deviceCode: textValue(first(row, ["设备编号", "设备号"])),
     serviceCode: textValue(first(row, ["I服务编号", "I 服务编号", "服务编号"])),
     serviceName: textValue(first(row, ["I服务简称", "I 服务简称", "服务简称"])),
+    serviceCodeII: textValue(first(row, ["II服务编号", "II 服务编号"])),
+    serviceNameII: textValue(first(row, ["II服务简称", "II 服务简称"])),
     initialCompletedDate,
     rawCompletedDate,
     completedDate,
     completionDateSource: initialCompletedDate ? "初始完工日期" : rawCompletedDate ? "完工日期兜底" : "缺失",
     activeStatus: textValue(first(row, ["活跃状态", "服务状态"])),
-    meteringRule: textValue(first(row, ["计量规则"])),
+    meteringRule: sourceMeteringRule,
+    sourceMeteringRule,
+    calculationRuleSource: "CRM静态结果",
     lines: numericValue(first(row, ["线数", "数量"])),
     monthlyMetering: numericValue(first(row, ["月平均计量", "月均计量", "月平均金额"])),
     discountedTariff: numericValue(first(row, ["优惠资费", "年优惠资费"])),
@@ -204,6 +239,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     paymentCycle: textValue(first(row, ["付费周期", "付款周期"])),
     providerCategory: textValue(first(row, ["I 服务分类", "I服务分类", "服务分类"])),
     belowAuthorizedPrice: textValue(first(row, ["是否低于授权价"])),
+    grossProfit: numericValue(first(row, ["业务毛利（完成）", "业务毛利(完成)", "业务毛利（未完成）", "业务毛利(未完成)", "业务毛利"])),
   };
 }
 
@@ -228,10 +264,10 @@ function needsReview(row: BusinessRow) {
   return !row.meteringRule || row.monthlyMetering === null || /年付|两年付/.test(row.businessName);
 }
 
-function buildRanking(rows: BusinessRow[], field: "owner" | "provider"): RankedItem[] {
+function buildRanking(rows: BusinessRow[], field: "owner" | "provider" | "service" | "service2"): RankedItem[] {
   const groups = new Map<string, { lines: number; amounts: NumericValue[] }>();
   for (const row of rows) {
-    const key = row[field];
+    const key = field === "service" ? row.serviceCode : field === "service2" ? row.serviceCodeII : row[field];
     if (!key) continue;
     const item = groups.get(key) ?? { lines: 0, amounts: [] };
     item.lines += row.lines ?? 1;
@@ -251,17 +287,17 @@ function lineCount(row: BusinessRow) {
 
 export function buildPerformance(
   rows: BusinessRow[],
-  field: "owner" | "provider" | "service",
+  field: "owner" | "provider" | "service" | "service2",
   options: { removalsOnly?: boolean; amount?: "monthlyMetering" | "discountedTariff" | "marketingFee" } = {},
 ): PerformanceRow[] {
   const amountField = options.amount ?? "monthlyMetering";
   const groups = new Map<string, { label: string; secondary: string; lines: number; amounts: NumericValue[] }>();
   for (const row of rows) {
     if (options.removalsOnly && !isRemoval(row)) continue;
-    const key = field === "service" ? row.serviceCode : row[field];
+    const key = field === "service" ? row.serviceCode : field === "service2" ? row.serviceCodeII : row[field];
     if (!key) continue;
-    const label = field === "service" ? row.serviceCode : key;
-    const secondary = field === "service" ? row.serviceName : "";
+    const label = field === "service" ? row.serviceCode : field === "service2" ? row.serviceCodeII : key;
+    const secondary = field === "service" ? row.serviceName : field === "service2" ? row.serviceNameII : "";
     const item = groups.get(key) ?? { label, secondary, lines: 0, amounts: [] };
     item.lines += lineCount(row);
     item.amounts.push(row[amountField]);
@@ -279,6 +315,66 @@ export function buildPerformance(
     }))
     .sort((left, right) => (right.amount ?? -Infinity) - (left.amount ?? -Infinity))
     .map((item, index) => ({ ...item, rank: index + 1 }));
+}
+
+export const DEFAULT_CALCULATION_RULES: CalculationRuleConfig = {
+  enabled: true,
+  version: "V1.0",
+  baseDate: new Date().toISOString().slice(0, 10),
+  incrementalYear: 2026,
+  newVolumeMonths: 13,
+  overdueMonths: 120,
+  removalRateDenominator: "total",
+};
+
+function monthDistance(later: string, earlier: string) {
+  const [laterYear, laterMonth] = later.split("-").map(Number);
+  const [earlierYear, earlierMonth] = earlier.split("-").map(Number);
+  if (![laterYear, laterMonth, earlierYear, earlierMonth].every(Number.isFinite)) return null;
+  return (laterYear - earlierYear) * 12 + laterMonth - earlierMonth;
+}
+
+export function applyDynamicCalculationRules(rows: BusinessRow[], config: CalculationRuleConfig): BusinessRow[] {
+  return rows.map((row) => {
+    const sourceMeteringRule = row.sourceMeteringRule || row.meteringRule;
+    if (!config.enabled || !row.completedDate) return { ...row, sourceMeteringRule, meteringRule: sourceMeteringRule, calculationRuleSource: "CRM静态结果" };
+    const distance = monthDistance(config.baseDate, row.completedDate);
+    let meteringRule = sourceMeteringRule;
+    if (row.completedDate.startsWith(`${config.incrementalYear}-`)) meteringRule = "新增量";
+    else if (distance !== null && distance < config.newVolumeMonths) meteringRule = "新量";
+    else if (distance !== null && distance > config.overdueMonths) meteringRule = "超期";
+    else if (distance !== null) meteringRule = "存量";
+    return { ...row, sourceMeteringRule, meteringRule, calculationRuleSource: "平台动态计算" };
+  });
+}
+
+export function buildBusinessProgress(rows: BusinessRow[], dimension: "company" | "owner" | "service" | "service2", denominator: "total" | "installs"): BusinessProgressRow[] {
+  const groups = new Map<string, BusinessRow[]>();
+  for (const row of rows) {
+    const key = dimension === "company" ? "公司总体" : dimension === "owner" ? row.owner : dimension === "service" ? row.serviceCode : row.serviceCodeII;
+    if (!key) continue;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.entries()].map(([key, group]) => {
+    const installs = group.filter(isInstall);
+    const removals = group.filter(isRemoval);
+    const totalLines = group.reduce((sum, row) => sum + lineCount(row), 0);
+    const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
+    const removalLines = removals.reduce((sum, row) => sum + lineCount(row), 0);
+    const rateBase = denominator === "installs" ? installLines : totalLines;
+    return {
+      key,
+      label: key,
+      totalLines,
+      installs: installLines,
+      removals: removalLines,
+      removalRate: rateBase ? (removalLines / rateBase) * 100 : null,
+      netGrowth: installLines - removalLines,
+      monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
+      newGrossProfit: sumKnown(group.filter((row) => /新增量|新量/.test(row.meteringRule)).map((row) => row.grossProfit)),
+      stockGrossProfit: sumKnown(group.filter((row) => /存量|超期/.test(row.meteringRule)).map((row) => row.grossProfit)),
+    };
+  }).sort((left, right) => right.totalLines - left.totalLines);
 }
 
 export function buildMonthlyBusiness(rows: BusinessRow[]): MonthlyBusinessRow[] {
@@ -408,7 +504,8 @@ export function buildSnapshot(
       .map(([month, item]) => ({ month, installs: item.installs, removals: item.removals, amount: sumKnown(item.amounts) })),
     meteringRules: [...ruleMap.entries()].map(([label, value], index) => ({ label, value, color: RULE_COLORS[label] ?? ["#7657d5", "#2a91a8", "#8b6a4f"][index % 3] })),
     owners: buildRanking(rows, "owner"),
-    providers: buildRanking(rows, "provider"),
+    providers: buildRanking(rows, "service"),
+    providersII: buildRanking(rows, "service2"),
     rows,
   };
 }
@@ -425,6 +522,10 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     completedDate,
     completionDateSource: initialCompletedDate ? "初始完工日期" as const : rawCompletedDate ? "完工日期兜底" as const : "缺失" as const,
     provider: row.provider ?? "",
+    serviceCodeII: row.serviceCodeII ?? "",
+    serviceNameII: row.serviceNameII ?? "",
+    sourceMeteringRule: row.sourceMeteringRule ?? row.meteringRule ?? "",
+    calculationRuleSource: row.calculationRuleSource ?? "CRM静态结果",
     deviceCode: row.deviceCode ?? "",
     lines: row.lines === undefined ? null : row.lines,
     monthlyMetering: row.monthlyMetering === undefined ? null : row.monthlyMetering,
@@ -433,6 +534,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     paymentCycle: row.paymentCycle ?? "",
     providerCategory: row.providerCategory ?? "",
     belowAuthorizedPrice: row.belowAuthorizedPrice ?? "",
+    grossProfit: row.grossProfit === undefined ? null : row.grossProfit,
   }); }) : [];
   if (!rows.length) return EMPTY_SNAPSHOT;
   return buildSnapshot(rows, input.source ?? { label: "本地快照", files: [], currentFile: "--" }, input.mode === "imported" ? "imported" : "local");

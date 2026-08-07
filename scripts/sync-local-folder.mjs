@@ -154,14 +154,18 @@ const safeRows = businessRows.slice(0, 500).map((row) => {
   owner: row["负责人"],
   provider: row["供应商"],
   deviceCode: row["设备编号"],
-  serviceCode: row["I 服务编号"],
-  serviceName: row["I 服务简称"],
+  serviceCode: row["I 服务编号"] || row["I服务编号"] || "",
+  serviceName: row["I 服务简称"] || row["I服务简称"] || "",
+  serviceCodeII: row["II 服务编号"] || row["II服务编号"] || "",
+  serviceNameII: row["II 服务简称"] || row["II服务简称"] || "",
   initialCompletedDate,
   rawCompletedDate,
   completedDate: initialCompletedDate || rawCompletedDate,
   completionDateSource: initialCompletedDate ? "初始完工日期" : rawCompletedDate ? "完工日期兜底" : "缺失",
   activeStatus: row["活跃状态"],
   meteringRule: row["计量规则"],
+  sourceMeteringRule: row["计量规则"],
+  calculationRuleSource: "CRM静态结果",
   lines: 1,
   monthlyMetering: number(row["月平均计量"]),
   discountedTariff: number(row["优惠资费"]),
@@ -169,6 +173,7 @@ const safeRows = businessRows.slice(0, 500).map((row) => {
   paymentCycle: row["付费周期"] || row["付款周期"] || "",
   providerCategory: row["I 服务分类"] || "",
   belowAuthorizedPrice: row["是否低于授权价"] || "",
+  grossProfit: number(row["业务毛利（完成）"] || row["业务毛利(完成)"] || row["业务毛利"]),
 }); });
 
 const snapshot = {
@@ -208,6 +213,12 @@ const snapshot = {
     (row) => row["I 服务编号"],
     (row) => row["I 服务简称"],
     (row) => row["I 服务编号"],
+  ),
+  providersII: groupedRanking(
+    businessRows,
+    (row) => row["II 服务编号"] || row["II服务编号"],
+    (row) => row["II 服务简称"] || row["II服务简称"],
+    (row) => row["II 服务编号"] || row["II服务编号"],
   ),
   rows: safeRows,
   quality: [

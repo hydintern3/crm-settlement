@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
+  buildBusinessProgress,
   buildCompletionCohorts,
   buildDataQualityMetrics,
   buildMonthlyBusiness,
@@ -9,6 +10,7 @@ import {
   buildPerformance,
   isRemoval,
   type BusinessRow,
+  type CalculationRuleConfig,
   type NumericValue,
 } from "../lib/data-model";
 import { REPORTS } from "../lib/report-registry";
@@ -34,6 +36,22 @@ function ReportPanel({ label, title, description, status = "ready", children, wi
     <div className="panel-header"><div><span className="section-label">{label}</span><h2>{title}</h2><p>{description}</p></div><span className={`status-chip ${status}`}>{statusText}</span></div>
     {children}
   </article>;
+}
+
+export function BusinessProgressTables({ rows, rules }: { rows: BusinessRow[]; rules: CalculationRuleConfig }) {
+  const [dimension, setDimension] = useState<"company" | "owner" | "service" | "service2">("company");
+  const dimensions = [["company", "公司总体"], ["owner", "各销售"], ["service", "I服务商"], ["service2", "II服务商"]] as const;
+  const progressRows = buildBusinessProgress(rows, dimension, rules.removalRateDenominator).map((item) => ({
+    key: item.key, label: item.label, total: number(item.totalLines), installs: number(item.installs), removals: number(item.removals),
+    removalRate: percent(item.removalRate), netGrowth: number(item.netGrowth), amount: money(item.monthlyMetering),
+    newMargin: money(item.newGrossProfit), stockMargin: money(item.stockGrossProfit),
+  }));
+  const denominatorText = rules.removalRateDenominator === "total" ? "拆机线数 / 总线数" : "拆机线数 / 新增线数";
+  return <section className="module-grid report-module-grid"><ReportPanel wide label="BUSINESS PROGRESS" title="业务进展多维分析" status="partial" description={`同一套指标支持公司、销售、I服务商和II服务商切换；当前拆机率口径：${denominatorText}。毛利仅汇总源数据已有值。`}>
+    <div className="dimension-tabs" role="tablist" aria-label="业务进展分析维度">{dimensions.map(([key, label]) => <button key={key} className={dimension === key ? "active" : ""} onClick={() => setDimension(key)}>{label}</button>)}</div>
+    <ReportTable columns={[{ key: "label", label: "分析对象" }, { key: "total", label: "总量", numeric: true }, { key: "installs", label: "新增", numeric: true }, { key: "removals", label: "拆机", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "netGrowth", label: "净增长", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "newMargin", label: "新增毛利", numeric: true }, { key: "stockMargin", label: "存量毛利", numeric: true }]} rows={progressRows} emptyText={dimension === "service2" ? "当前筛选记录没有II服务编号" : "暂无匹配数据"} />
+    {progressRows.every((row) => row.newMargin === "--" && row.stockMargin === "--") && <div className="availability-note"><strong>毛利暂未启用</strong><span>需补充运营有效金额、结算有效金额及新增/存量毛利规则。</span></div>}
+  </ReportPanel></section>;
 }
 
 function ReportTable({ columns, rows, emptyText = "暂无匹配数据" }: { columns: Column[]; rows: TableRow[]; emptyText?: string }) {
@@ -154,6 +172,9 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     </ReportPanel>
     <ReportPanel label="TOP 10 REMOVALS" title="服务商拆机排名" description="仅统计业务属性识别为拆机、退订或注销的记录。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(true)} />
+    </ReportPanel>
+    <ReportPanel wide label="II SERVICE PROVIDERS" title="II服务商进单排名" status="partial" description="按II服务编号汇总；II服务编号为空的记录不纳入排名，也不会用供应商名称代替。">
+      <ReportTable columns={[{ key: "code", label: "II 服务编号" }, { key: "name", label: "II 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={buildPerformance(rows, "service2").slice(0, 10).map((item) => ({ key: item.key, code: item.label, name: item.secondary || "--", lines: number(item.lines), amount: money(item.amount), share: percent(item.share), rank: item.rank }))} emptyText="当前筛选记录没有II服务编号" />
     </ReportPanel>
     <ReportPanel wide label="PROVIDER CATEGORY" title="年拆机服务商分类占比" status="partial" description="服务分类当前可能因脱敏而全部为空；系统不会自动补齐。">
       <ReportTable columns={[{ key: "category", label: "I 服务分类" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "note", label: "备注" }]} rows={categoryRows} emptyText="服务分类为空或当前筛选无记录" />

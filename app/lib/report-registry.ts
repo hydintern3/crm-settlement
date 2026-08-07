@@ -12,6 +12,17 @@ export type ReportDefinition = {
 
 export const REPORTS: ReportDefinition[] = [
   {
+    id: "business-progress-multidimensional",
+    name: "业务进展多维分析",
+    description: "公司总体、各销售、I服务商与II服务商的总量、新增、拆机、拆机率、净增长和毛利",
+    dataset: "business",
+    dimensions: ["公司", "负责人", "I服务编号", "II服务编号"],
+    metrics: ["总量", "新增", "拆机", "拆机率", "净增长", "新增毛利", "存量毛利"],
+    status: "ready",
+    short: "进展",
+    tone: "navy",
+  },
+  {
     id: "data-quality",
     name: "数据质量与日期兜底",
     description: "设备唯一键、日期缺失、兜底来源与顺序异常",
