@@ -70,6 +70,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(dataModelSource, /serviceCodeII/);
   assert.match(dataModelSource, /applyDynamicCalculationRules/);
   assert.match(dataModelSource, /buildBusinessProgress/);
+  assert.match(dataModelSource, /netMonthlyMetering/);
+  assert.match(dataModelSource, /netAverageTariff/);
   assert.match(dataModelSource, /providers: buildRanking\(rows, "service"\)/);
   assert.doesNotMatch(dataModelSource, /\["供应商", "服务商"/);
   assert.match(workbookSource, /flatMap/);
@@ -98,6 +100,10 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(reportTablesSource, /服务商综合分布/);
   assert.match(reportTablesSource, /服务商拆机排名/);
   assert.match(reportTablesSource, /业务进展多维分析/);
+  assert.match(reportTablesSource, /新增月平均计量/);
+  assert.match(reportTablesSource, /拆机月平均计量/);
+  assert.match(reportTablesSource, /净增长月平均计量/);
+  assert.match(reportTablesSource, /净增月平均资费/);
   assert.match(reportTablesSource, /II服务商进单排名/);
   assert.match(reportTablesSource, /结算按业务汇总/);
   assert.doesNotMatch(reportTablesSource, /身份证号码|银行卡号|手机号码/);

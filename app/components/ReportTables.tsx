@@ -42,14 +42,15 @@ export function BusinessProgressTables({ rows, rules }: { rows: BusinessRow[]; r
   const [dimension, setDimension] = useState<"company" | "owner" | "service" | "service2">("company");
   const dimensions = [["company", "公司总体"], ["owner", "各销售"], ["service", "I服务商"], ["service2", "II服务商"]] as const;
   const progressRows = buildBusinessProgress(rows, dimension, rules.removalRateDenominator).map((item) => ({
-    key: item.key, label: item.label, total: number(item.totalLines), installs: number(item.installs), removals: number(item.removals),
-    removalRate: percent(item.removalRate), netGrowth: number(item.netGrowth), amount: money(item.monthlyMetering),
+    key: item.key, label: item.label, total: number(item.totalLines), installs: number(item.installs), installAmount: money(item.installMonthlyMetering),
+    removals: number(item.removals), removalAmount: money(item.removalMonthlyMetering), removalRate: percent(item.removalRate),
+    netGrowth: number(item.netGrowth), netAmount: money(item.netMonthlyMetering), netTariff: money(item.netAverageTariff), amount: money(item.monthlyMetering),
     newMargin: money(item.newGrossProfit), stockMargin: money(item.stockGrossProfit),
   }));
   const denominatorText = rules.removalRateDenominator === "total" ? "拆机线数 / 总线数" : "拆机线数 / 新增线数";
-  return <section className="module-grid report-module-grid"><ReportPanel wide label="BUSINESS PROGRESS" title="业务进展多维分析" status="partial" description={`同一套指标支持公司、销售、I服务商和II服务商切换；当前拆机率口径：${denominatorText}。毛利仅汇总源数据已有值。`}>
+  return <section className="module-grid report-module-grid"><ReportPanel wide label="BUSINESS PROGRESS" title="业务进展多维分析" status="partial" description={`同一套指标支持公司、销售、I服务商和II服务商切换；当前拆机率口径：${denominatorText}。净增长月平均计量＝新增月平均计量－拆机月平均计量；净增月平均资费＝净增长月平均计量÷净增长线路数，净增长线路数为0时显示--。`}>
     <div className="dimension-tabs" role="tablist" aria-label="业务进展分析维度">{dimensions.map(([key, label]) => <button key={key} className={dimension === key ? "active" : ""} onClick={() => setDimension(key)}>{label}</button>)}</div>
-    <ReportTable columns={[{ key: "label", label: "分析对象" }, { key: "total", label: "总量", numeric: true }, { key: "installs", label: "新增", numeric: true }, { key: "removals", label: "拆机", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "netGrowth", label: "净增长", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "newMargin", label: "新增毛利", numeric: true }, { key: "stockMargin", label: "存量毛利", numeric: true }]} rows={progressRows} emptyText={dimension === "service2" ? "当前筛选记录没有II服务编号" : "暂无匹配数据"} />
+    <ReportTable columns={[{ key: "label", label: "分析对象" }, { key: "total", label: "总线路数", numeric: true }, { key: "amount", label: "总月平均计量", numeric: true }, { key: "installs", label: "新增线路数", numeric: true }, { key: "installAmount", label: "新增月平均计量", numeric: true }, { key: "removals", label: "拆机线路数", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "netGrowth", label: "净增长线路数", numeric: true }, { key: "netAmount", label: "净增长月平均计量", numeric: true }, { key: "netTariff", label: "净增月平均资费", numeric: true }, { key: "newMargin", label: "新增毛利", numeric: true }, { key: "stockMargin", label: "存量毛利", numeric: true }]} rows={progressRows} emptyText={dimension === "service2" ? "当前筛选记录没有II服务编号" : "暂无匹配数据"} />
     {progressRows.every((row) => row.newMargin === "--" && row.stockMargin === "--") && <div className="availability-note"><strong>毛利暂未启用</strong><span>需补充运营有效金额、结算有效金额及新增/存量毛利规则。</span></div>}
   </ReportPanel></section>;
 }

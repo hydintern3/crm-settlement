@@ -17,7 +17,7 @@ export const REPORTS: ReportDefinition[] = [
     description: "公司总体、各销售、I服务商与II服务商的总量、新增、拆机、拆机率、净增长和毛利",
     dataset: "business",
     dimensions: ["公司", "负责人", "I服务编号", "II服务编号"],
-    metrics: ["总量", "新增", "拆机", "拆机率", "净增长", "新增毛利", "存量毛利"],
+    metrics: ["总量", "新增线路数", "新增月平均计量", "拆机线路数", "拆机月平均计量", "拆机率", "净增长线路数", "净增长月平均计量", "净增月平均资费", "新增毛利", "存量毛利"],
     status: "ready",
     short: "进展",
     tone: "navy",

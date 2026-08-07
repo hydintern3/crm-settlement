@@ -43,9 +43,13 @@ export type BusinessProgressRow = {
   label: string;
   totalLines: number;
   installs: number;
+  installMonthlyMetering: NumericValue;
   removals: number;
+  removalMonthlyMetering: NumericValue;
   removalRate: NumericValue;
   netGrowth: number;
+  netMonthlyMetering: NumericValue;
+  netAverageTariff: NumericValue;
   monthlyMetering: NumericValue;
   newGrossProfit: NumericValue;
   stockGrossProfit: NumericValue;
@@ -361,15 +365,23 @@ export function buildBusinessProgress(rows: BusinessRow[], dimension: "company" 
     const totalLines = group.reduce((sum, row) => sum + lineCount(row), 0);
     const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
     const removalLines = removals.reduce((sum, row) => sum + lineCount(row), 0);
+    const installMonthlyMetering = installs.length ? sumKnown(installs.map((row) => row.monthlyMetering)) : 0;
+    const removalMonthlyMetering = removals.length ? sumKnown(removals.map((row) => row.monthlyMetering)) : 0;
+    const netGrowth = installLines - removalLines;
+    const netMonthlyMetering = installMonthlyMetering !== null && removalMonthlyMetering !== null ? installMonthlyMetering - removalMonthlyMetering : null;
     const rateBase = denominator === "installs" ? installLines : totalLines;
     return {
       key,
       label: key,
       totalLines,
       installs: installLines,
+      installMonthlyMetering,
       removals: removalLines,
+      removalMonthlyMetering,
       removalRate: rateBase ? (removalLines / rateBase) * 100 : null,
-      netGrowth: installLines - removalLines,
+      netGrowth,
+      netMonthlyMetering,
+      netAverageTariff: netMonthlyMetering !== null && netGrowth !== 0 ? netMonthlyMetering / netGrowth : null,
       monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
       newGrossProfit: sumKnown(group.filter((row) => /新增量|新量/.test(row.meteringRule)).map((row) => row.grossProfit)),
       stockGrossProfit: sumKnown(group.filter((row) => /存量|超期/.test(row.meteringRule)).map((row) => row.grossProfit)),
