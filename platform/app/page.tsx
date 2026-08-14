@@ -107,27 +107,28 @@ export default function Home() {
   const [activeNav, setActiveNav] = useState<ViewName>("总览");
   const [showImport, setShowImport] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [calculationRules, setCalculationRules] = useState<CalculationRuleConfig>(DEFAULT_CALCULATION_RULES);
-  const [calculationRulesReady, setCalculationRulesReady] = useState(false);
+  const [calculationRules, setCalculationRules] = useState<CalculationRuleConfig>(() => {
+    if (typeof window === "undefined") return DEFAULT_CALCULATION_RULES;
+    try {
+      const storedRules = window.localStorage.getItem("crm-calculation-rules");
+      return storedRules ? { ...DEFAULT_CALCULATION_RULES, ...JSON.parse(storedRules) } : DEFAULT_CALCULATION_RULES;
+    } catch {
+      return DEFAULT_CALCULATION_RULES;
+    }
+  });
   const deferredKeyword = useDeferredValue(filters.keyword.trim().toLowerCase());
 
   useEffect(() => {
     const listener = () => { const next = decodeURIComponent(window.location.hash.slice(1)) as ViewName; if (NAV_ITEMS.some(([name]) => name === next)) setActiveNav(next); };
     window.addEventListener("hashchange", listener);
     queueMicrotask(listener);
-    try {
-      const storedRules = window.localStorage.getItem("crm-calculation-rules");
-      if (storedRules) setCalculationRules({ ...DEFAULT_CALCULATION_RULES, ...JSON.parse(storedRules) });
-    } catch { /* 浏览器禁用本地存储时仍可在当前会话使用。 */ }
-    setCalculationRulesReady(true);
-    fetch("/data/local-snapshot.json", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => setSnapshot(normalizeSnapshot(data))).catch(() => setSnapshot(EMPTY_SNAPSHOT));
+    fetch("/data/local-snapshot.json", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => setSnapshot(normalizeSnapshot(data as Partial<Snapshot>))).catch(() => setSnapshot(EMPTY_SNAPSHOT));
     return () => window.removeEventListener("hashchange", listener);
   }, []);
 
   useEffect(() => {
-    if (!calculationRulesReady) return;
     try { window.localStorage.setItem("crm-calculation-rules", JSON.stringify(calculationRules)); } catch { /* 仅影响偏好持久化。 */ }
-  }, [calculationRules, calculationRulesReady]);
+  }, [calculationRules]);
 
   const calculatedRows = useMemo(() => applyDynamicCalculationRules(snapshot?.rows ?? [], calculationRules), [snapshot, calculationRules]);
   const filteredRows = useMemo(() => calculatedRows.filter((row) => {

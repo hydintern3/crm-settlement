@@ -2,6 +2,16 @@ import { env } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./schema";
 
+declare global {
+  // Cloudflare's generated runtime types expose bindings through this namespace.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Cloudflare {
+    interface Env {
+      DB?: D1Database;
+    }
+  }
+}
+
 export function getDb() {
   if (!env.DB) {
     throw new Error(

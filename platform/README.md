@@ -19,7 +19,7 @@ npm.cmd run dev
 
 - 本地同步只生成平台所需的业务字段，不包含客户、联系人、手机号、地址、统一社会信用代码、证件或银行卡信息。
 - 本地快照为 `public/data/local-snapshot.json`，已在 `.gitignore` 中排除，不得提交或部署。
-- 线上预览仅使用 `public/data/demo-snapshot.json` 中的脱敏示例数据。
+- 线上部署默认不携带任何业务快照，首次打开显示空状态；用户只可在浏览器本地导入数据。
 - 原始 Excel 和 CSV 均保持只读；平台不回写 BH 公式或源数据。
 
 ## 扩展报表
@@ -37,8 +37,17 @@ npm.cmd run dev
 ## 验证
 
 ```powershell
-npm.cmd run build
-npm.cmd test
+npm.cmd run verify
 ```
+
+`verify` 会依次执行代码规范检查、TypeScript 类型检查、生产构建、服务端渲染测试和本地快照泄漏检查。
+
+## 部署
+
+- 部署项目根目录设置为 `platform`。
+- Node.js 使用 `22.13.0` 或更高的兼容版本。
+- 安装命令使用 `npm ci`，构建命令使用 `npm run build`。
+- Sites 配置位于 `.openai/hosting.json`；当前不使用 D1 或 R2。
+- 发布前必须执行 `npm run verify`，并确认构建目录不包含 `data/local-snapshot.json`。
 
 当前结算候选仅供内部工作分流。年付、两年付、拆机、变更、服务商状态异常等场景继续保留人工复核。
