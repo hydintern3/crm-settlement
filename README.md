@@ -28,14 +28,14 @@ npm.cmd run verify
 | 推荐系统 | 64 位 Linux |
 | 运行方式 | Docker Compose |
 | 容器端口 | `3000` |
-| 默认监听 | `127.0.0.1:3000` |
+| 默认监听 | `127.0.0.1:3100` |
 
 ```bash
 cp .env.deploy.example .env
 docker compose up -d --build
-curl http://127.0.0.1:3000/api/health
+curl http://127.0.0.1:3100/crm/api/health
 ```
 
-域名、HTTPS、防火墙、更新和回滚步骤见 [`docs/cloud-host-deployment.md`](docs/cloud-host-deployment.md)。
+应用固定挂载在 `/crm/`，可与同一 Nginx 下的现有网站共存。完整的 Nginx 合并、验证、更新和回滚步骤见 [`docs/cloud-host-deployment.md`](docs/cloud-host-deployment.md)。
 
 线上构建不携带本地业务快照。毛利、目标、正式结算、收付、销账和发票等缺少输入时保持空状态，不生成模拟金额。

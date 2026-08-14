@@ -47,7 +47,7 @@ jobs:
       - name: Check container health
         run: |
           for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:3100/api/health; then
+            if curl --fail --silent http://127.0.0.1:3100/crm/api/health; then
               exit 0
             fi
             sleep 1

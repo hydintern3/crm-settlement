@@ -4,6 +4,7 @@ import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState 
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
 import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, ProfitTargetTables, ProviderReportTables, ReportCatalog, SalesReportTables, SettlementReportTables } from "./components/ReportTables";
 import { applyDynamicCalculationRules, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
+import { BASE_PATH } from "./lib/deployment";
 
 const LazyImportDialog = lazy(() => import("./components/ImportDialog").then((module) => ({ default: module.ImportDialog })));
 const LazyMonthlyChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.MonthlyChart })));
@@ -141,7 +142,7 @@ export default function Home() {
     const listener = () => { const next = decodeURIComponent(window.location.hash.slice(1)) as ViewName; if (NAV_ITEMS.some(([name]) => name === next)) setActiveNav(next); };
     window.addEventListener("hashchange", listener);
     queueMicrotask(listener);
-    fetch("/data/local-snapshot.json", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => setSnapshot(normalizeSnapshot(data as Partial<Snapshot>))).catch(() => setSnapshot(EMPTY_SNAPSHOT));
+    fetch(`${BASE_PATH}/data/local-snapshot.json`, { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => setSnapshot(normalizeSnapshot(data as Partial<Snapshot>))).catch(() => setSnapshot(EMPTY_SNAPSHOT));
     return () => window.removeEventListener("hashchange", listener);
   }, []);
 

@@ -5,5 +5,6 @@
 - `vendor/xlsx-0.20.3.tgz` 是固定版本的 SheetJS CE 发布包；升级时必须同步更新校验值并重新运行完整验证。
 - 当前 `npm audit` 的剩余告警来自 `vinext -> image-size`。standalone 生成器会把该包带入运行镜像，但本项目不使用 Next Image，Node 适配器的图片入口只执行经过校验的本地重定向，不调用相关格式解析器。上游尚无无漏洞版本，因此不得使用 `npm audit fix --force` 回退构建工具。
 - 开发、构建和运行环境只处理仓库内受信任的图片资源；不要把外部不受信任的 ICNS、JXL 或 HEIF 文件交给该工具链解析。镜像升级时必须重新核对这一残余风险。
+- `/crm` 只是路由隔离，不是身份认证。云主机必须沿用公司 VPN、安全组、统一网关或 Nginx 访问控制，不得因路径不同而视为私有服务。
 
 线上发布以 `npm audit --omit=dev` 的结果为准，并由 `npm run verify` 自动执行。

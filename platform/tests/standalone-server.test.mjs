@@ -42,15 +42,21 @@ test("standalone server exposes the health endpoint and CRM page", { timeout: 20
   child.stderr.on("data", (chunk) => { output += chunk; });
 
   try {
-    const healthUrl = `http://127.0.0.1:${port}/api/health`;
+    const healthUrl = `http://127.0.0.1:${port}/crm/api/health`;
     const health = await waitForServer(healthUrl, child);
     assert.deepEqual(await health.json(), { status: "ok", service: "crm-analysis-platform" });
     assert.equal(health.headers.get("cache-control"), "no-store");
 
-    const page = await fetch(`http://127.0.0.1:${port}/`);
+    const page = await fetch(`http://127.0.0.1:${port}/crm/`);
     assert.equal(page.status, 200);
     assert.match(page.headers.get("content-type") ?? "", /^text\/html\b/i);
-    assert.match(await page.text(), /CRM 业务分析与结算管理平台/);
+    const html = await page.text();
+    assert.match(html, /CRM 业务分析与结算管理平台/);
+    assert.match(html, /\/crm\/assets\//);
+    assert.match(html, /\/crm\/og\.png/);
+
+    const rootPage = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(rootPage.status, 404);
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : error}\n服务输出：\n${output}`);
   } finally {
