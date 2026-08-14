@@ -1,46 +1,67 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/.vinext/
-/out/
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-next-env.d.ts
-/dist/
-/.wrangler/
+# CRM source data and locally generated analysis artifacts
+/csv_output/
 /outputs/
-/work/
+/.codex/
+/*.xls
+/*.xlsx
+/*.xlsm
+/*.xlsb
+/*.ods
+/*.csv
+/*.tsv
+~$*
 
-# local CRM snapshots must never be committed or deployed
-public/data/local-snapshot.json
-.codex-dev.*.log
+# Allow deliberately sanitized test fixtures when they are added later
+!platform/tests/fixtures/**/*.csv
+!platform/tests/fixtures/**/*.tsv
+
+# Local snapshots must never be committed or published
+**/public/data/local-snapshot.json
+
+# Dependencies and build outputs
+**/node_modules/
+**/.next/
+**/.vinext/
+**/dist/
+**/out/
+**/coverage/
+**/.wrangler/
+**/.turbo/
+**/.cache/
+**/*.tsbuildinfo
+
+# Local environments, secrets, and credentials
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+**/*.pem
+**/*.key
+**/*.pfx
+**/*.p12
+
+# Logs, temporary files, and packaged site artifacts
+**/*.log
+**/*.tmp
+**/*.temp
+**/*.tar
+**/*.tar.gz
+**/*.tgz
+**/*.zip
+
+# Python and tool caches
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
