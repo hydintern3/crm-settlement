@@ -21,14 +21,21 @@ npm.cmd run verify
 
 该命令覆盖代码规范、类型、生产依赖审计、生产构建、服务端渲染、发布包数据泄漏和包体预算检查。GitHub Actions 会对 `main` 分支和 Pull Request 自动执行相同检查。
 
-## 部署参数
+## 云主机部署
 
 | 设置 | 值 |
 | --- | --- |
-| 项目根目录 | `platform` |
-| Node.js | `22.13.0` |
-| 安装命令 | `npm ci` |
-| 构建命令 | `npm run build` |
-| Sites 配置 | `platform/.openai/hosting.json` |
+| 推荐系统 | 64 位 Linux |
+| 运行方式 | Docker Compose |
+| 容器端口 | `3000` |
+| 默认监听 | `127.0.0.1:3000` |
+
+```bash
+cp .env.deploy.example .env
+docker compose up -d --build
+curl http://127.0.0.1:3000/api/health
+```
+
+域名、HTTPS、防火墙、更新和回滚步骤见 [`docs/cloud-host-deployment.md`](docs/cloud-host-deployment.md)。
 
 线上构建不携带本地业务快照。毛利、目标、正式结算、收付、销账和发票等缺少输入时保持空状态，不生成模拟金额。

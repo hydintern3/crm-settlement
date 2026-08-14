@@ -34,3 +34,31 @@ jobs:
 
       - name: Verify deployment build
         run: npm run verify
+
+      - name: Build self-hosted container
+        run: docker compose -f ../compose.yaml build
+
+      - name: Start self-hosted container
+        env:
+          APP_PORT: 3100
+          BIND_ADDRESS: 127.0.0.1
+        run: docker compose -f ../compose.yaml up -d
+
+      - name: Check container health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose -f ../compose.yaml ps
+          docker compose -f ../compose.yaml logs crm-platform
+          exit 1
+
+      - name: Stop self-hosted container
+        if: always()
+        env:
+          APP_PORT: 3100
+          BIND_ADDRESS: 127.0.0.1
+        run: docker compose -f ../compose.yaml down

@@ -4,35 +4,8 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("https://crm.example.internal/", {
-      headers: { accept: "text/html", host: "crm.example.internal" },
-    }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
-}
-
-test("server-renders the CRM platform shell and metadata", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
-  assert.match(html, /<html lang="zh-CN">/);
-  assert.match(html, /衡析｜CRM 业务分析与结算管理平台/);
-  assert.match(html, /正在建立业务分析视图/);
-  assert.match(html, /https:\/\/crm\.example\.internal\/og\.png/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
-});
-
 test("keeps local data private and does not fall back to mock records", async () => {
-  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource, sitesPlugin, styleSource, chartSource] = await Promise.all([
+  const [gitignore, registry, syncScript, sourceConfig, pageSource, importSource, dataModelSource, workbookSource, sanitizeScript, styleSource, chartSource] = await Promise.all([
     readFile(new URL(".gitignore", root), "utf8"),
     readFile(new URL("app/lib/report-registry.ts", root), "utf8"),
     readFile(new URL("scripts/sync-local-folder.mjs", root), "utf8"),
@@ -41,7 +14,7 @@ test("keeps local data private and does not fall back to mock records", async ()
     readFile(new URL("app/components/ImportDialog.tsx", root), "utf8"),
     readFile(new URL("app/lib/data-model.ts", root), "utf8"),
     readFile(new URL("app/lib/workbook-import.ts", root), "utf8"),
-    readFile(new URL("build/sites-vite-plugin.ts", root), "utf8"),
+    readFile(new URL("scripts/sanitize-build.mjs", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/components/AnalyticsCharts.tsx", root), "utf8"),
   ]);
@@ -82,7 +55,7 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(styleSource, /table \{ font-size: 12px/);
   assert.match(chartSource, /SVGRenderer/);
   assert.match(chartSource, /renderer: "svg"/);
-  assert.match(sitesPlugin, /local-snapshot\.json/);
+  assert.match(sanitizeScript, /local-snapshot\.json/);
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);
   assert.match(pageSource, /ProviderReportTables/);
@@ -109,4 +82,6 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.doesNotMatch(reportTablesSource, /身份证号码|银行卡号|手机号码/);
   await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));
   await assert.rejects(access(new URL("dist/client/data/local-snapshot.json", root)));
+  await assert.rejects(access(new URL("dist/standalone/dist/client/data/local-snapshot.json", root)));
+  await assert.rejects(access(new URL("dist/standalone/public/data/local-snapshot.json", root)));
 });

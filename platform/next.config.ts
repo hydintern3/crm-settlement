@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Produce a self-contained Node.js server for Docker/VPS deployments.
+  output: "standalone",
 };
 
 export default nextConfig;

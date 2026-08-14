@@ -44,12 +44,13 @@ npm.cmd run verify
 
 ## 部署
 
-- 部署项目根目录设置为 `platform`。
-- Node.js 使用 `22.13.0` 或更高的兼容版本。
-- 安装命令使用 `npm ci`，构建命令使用 `npm run build`。
-- Sites 配置位于 `.openai/hosting.json`；当前不使用 D1 或 R2。
+- 生产环境使用仓库根目录的 `compose.yaml` 构建 standalone Node.js 容器。
+- 容器固定使用 Node.js 22.13.0，以非 root 用户运行，并提供 `/api/health` 健康检查。
+- 默认只监听云主机的 `127.0.0.1:3000`，由 Nginx/Caddy 提供域名和 HTTPS。
 - 发布前必须执行 `npm run verify`，并确认构建目录不包含 `data/local-snapshot.json`。
 - SheetJS `0.20.3` 固定保存在 `vendor/`，部署不依赖安装时访问外部 CDN；导入同时限制文件大小、工作表数和总行数。
 - 图表与工作簿解析器按需加载，首屏 JavaScript 包体由自动测试限制在 350 KB 以内。
+
+完整操作见仓库根目录的 `docs/cloud-host-deployment.md`。
 
 当前结算候选仅供内部工作分流。年付、两年付、拆机、变更、服务商状态异常等场景继续保留人工复核。
