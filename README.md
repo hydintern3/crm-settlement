@@ -19,7 +19,7 @@ cd platform
 npm.cmd run verify
 ```
 
-该命令覆盖代码规范、类型、生产构建、服务端渲染和发布包数据泄漏检查。GitHub Actions 会对 `main` 分支和 Pull Request 自动执行相同检查。
+该命令覆盖代码规范、类型、生产依赖审计、生产构建、服务端渲染、发布包数据泄漏和包体预算检查。GitHub Actions 会对 `main` 分支和 Pull Request 自动执行相同检查。
 
 ## 部署参数
 

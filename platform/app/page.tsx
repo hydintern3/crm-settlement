@@ -1,11 +1,14 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
-import { ImportDialog } from "./components/ImportDialog";
-import { MonthlyChart, RankingChart, RuleChart } from "./components/AnalyticsCharts";
 import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, ProfitTargetTables, ProviderReportTables, ReportCatalog, SalesReportTables, SettlementReportTables } from "./components/ReportTables";
-import { applyDynamicCalculationRules, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type Snapshot } from "./lib/data-model";
+import { applyDynamicCalculationRules, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
+
+const LazyImportDialog = lazy(() => import("./components/ImportDialog").then((module) => ({ default: module.ImportDialog })));
+const LazyMonthlyChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.MonthlyChart })));
+const LazyRankingChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.RankingChart })));
+const LazyRuleChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.RuleChart })));
 
 const NAV_ITEMS = [
   ["总览", "总盘与关键指标"], ["统一查询", "明细筛选与导出"], ["业务分析", "趋势与计量结构"], ["销售分析", "负责人业绩与排名"],
@@ -17,6 +20,22 @@ const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], owners: [
 const safeText = (value: string | null | undefined) => value?.trim() || "--";
 const numberText = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
 const moneyWan = (value: NumericValue) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value / 10000);
+
+function ChartFallback() {
+  return <div className="chart-empty"><span>图表加载中…</span></div>;
+}
+
+function MonthlyChart({ data }: { data: Snapshot["monthly"] }) {
+  return <Suspense fallback={<ChartFallback />}><LazyMonthlyChart data={data} /></Suspense>;
+}
+
+function RuleChart({ data, onSelect }: { data: Snapshot["meteringRules"]; onSelect?: (name: string) => void }) {
+  return <Suspense fallback={<ChartFallback />}><LazyRuleChart data={data} onSelect={onSelect} /></Suspense>;
+}
+
+function RankingChart({ items, onSelect }: { items: RankedItem[]; onSelect?: (name: string) => void }) {
+  return <Suspense fallback={<ChartFallback />}><LazyRankingChart items={items} onSelect={onSelect} /></Suspense>;
+}
 
 function exportRows(rows: BusinessRow[]) {
   const headers = ["业务类型", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "有效完工日期", "日期来源", "活跃状态", "源计量规则", "当前计量规则", "计算来源", "线数", "月平均计量"];
@@ -173,6 +192,6 @@ export default function Home() {
 
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">衡</div><div><strong>衡析</strong><span>CRM 业务分析平台</span></div></div><nav>{NAV_ITEMS.map(([name, description], index) => <button key={name} className={activeNav === name ? "active" : ""} onClick={() => navigate(name)}><span className="nav-icon">{String(index + 1).padStart(2, "0")}</span><span><strong>{name}</strong><small>{description}</small></span></button>)}</nav><div className="sidebar-foot"><i className={snapshot.mode === "empty" ? "empty" : ""} /><div><strong>{snapshot.mode === "empty" ? "等待导入数据" : "数据已连接"}</strong><small>{snapshot.source.currentFile}</small></div></div></aside>
     <main className="main"><header className="topbar"><div><p className="eyebrow">BUSINESS INTELLIGENCE · 2026</p><h1>{activeNav}</h1></div><div className="top-actions"><span className="sync-state">数据更新：{updated}</span><button className="ghost-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出当前数据</button><button className="primary-button" onClick={() => setShowImport(true)}>＋ 导入数据</button></div></header>{filterBar}{snapshot.source.deduplication && <div className="dedup-banner"><div><strong>已按设备编号去重</strong><span>输入 {snapshot.source.deduplication.inputRows} 条，保留 {snapshot.source.deduplication.outputRows} 条，排除 {snapshot.source.deduplication.removedRows} 条重复记录。</span></div><small>{snapshot.source.deduplication.strategy}</small></div>}{snapshot.mode === "empty" && <AnalyticsPlaceholder onImport={() => setShowImport(true)} />}{snapshot.mode !== "empty" && content}<footer><span>缺失数据统一显示 -- · 不推断脱敏或已清空字段 · 结算结果仅供内部工作分流</span><span>BH 逻辑只读取结果，不回写原始公式</span></footer></main>
-    <ImportDialog open={showImport} onClose={() => setShowImport(false)} onImported={(data) => { setSnapshot(data); setFilters(EMPTY_FILTERS); }} />
+    {showImport ? <Suspense fallback={null}><LazyImportDialog open onClose={() => setShowImport(false)} onImported={(data) => { setSnapshot(data); setFilters(EMPTY_FILTERS); }} /></Suspense> : null}
   </div>;
 }

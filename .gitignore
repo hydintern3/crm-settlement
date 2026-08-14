@@ -49,6 +49,9 @@
 **/*.tgz
 **/*.zip
 
+# Audited SheetJS release is vendored for reproducible offline deployment
+!platform/vendor/xlsx-0.20.3.tgz
+
 # Python and tool caches
 **/__pycache__/
 **/*.py[cod]
@@ -64,4 +67,3 @@ Desktop.ini
 .vscode/
 *.swp
 *.swo
-

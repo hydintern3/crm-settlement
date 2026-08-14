@@ -16,6 +16,12 @@ type BusinessCandidate = {
 
 const BUSINESS_MARKERS = ["业务属性", "业务名称", "计量规则", "月平均计量"];
 const PROVIDER_MARKERS = ["服务编号", "服务状态", "服务商"];
+const MAX_FILES = 20;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+const MAX_SHEETS = 100;
+const MAX_ROWS_PER_SHEET = 100_000;
+const MAX_TOTAL_ROWS = 250_000;
 
 function classify(columns: string[]): InspectedSheet["kind"] {
   const compact = columns.map((column) => column.replace(/\s/g, ""));
@@ -37,14 +43,24 @@ function friendlyImportError(error: unknown, fileName: string) {
 export async function inspectWorkbookFiles(files: File[]): Promise<InspectedSheet[]> {
   const supported = files.filter((file) => /\.(csv|xls|xlsx|xlsm|xlsb|ods)$/i.test(file.name));
   if (!supported.length) throw new Error("请选择 CSV、XLS、XLSX、XLSM、XLSB 或 ODS 文件。");
+  if (supported.length > MAX_FILES) throw new Error(`一次最多导入 ${MAX_FILES} 个文件，请分批处理。`);
+  const oversized = supported.find((file) => file.size > MAX_FILE_BYTES);
+  if (oversized) throw new Error(`${oversized.name} 超过 25 MB，请拆分工作簿后再导入。`);
+  const totalBytes = supported.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > MAX_TOTAL_BYTES) throw new Error("本次文件总大小超过 100 MB，请分批导入。");
 
   const sheets: InspectedSheet[] = [];
+  let totalRows = 0;
   for (const file of supported) {
     try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true, dense: true });
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true, dense: true, bookDeps: false, bookFiles: false, bookVBA: false, WTF: false });
+      if (sheets.length + workbook.SheetNames.length > MAX_SHEETS) throw new Error(`工作表总数超过 ${MAX_SHEETS} 个，请分批导入。`);
       for (const sheetName of workbook.SheetNames) {
         const worksheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json<RawRow>(worksheet, { defval: "", raw: true, dateNF: "yyyy-mm-dd" });
+        if (rows.length > MAX_ROWS_PER_SHEET) throw new Error(`${file.name} / ${sheetName} 超过 ${MAX_ROWS_PER_SHEET.toLocaleString("zh-CN")} 行，请拆分后再导入。`);
+        totalRows += rows.length;
+        if (totalRows > MAX_TOTAL_ROWS) throw new Error(`本次数据总行数超过 ${MAX_TOTAL_ROWS.toLocaleString("zh-CN")} 行，请分批导入。`);
         const columns = rows.length ? Object.keys(rows[0]) : [];
         sheets.push({
           id: `${file.name}::${sheetName}`,
