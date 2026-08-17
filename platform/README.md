@@ -44,7 +44,8 @@ npm.cmd run verify
 
 ## 部署
 
-- 生产环境使用仓库根目录的 `compose.yaml` 构建 standalone Node.js 容器。
+- GitHub Actions 构建并验证 `linux/amd64` standalone 容器，随后发布到 `ghcr.io/hydintern3/crm-settlement`。
+- 生产云主机只拉取已验证镜像，不在服务器上访问 Docker Hub、npm 或执行应用构建。
 - 容器固定使用 Node.js 22.13.0，以非 root 用户运行，并提供 `/crm/api/health` 健康检查。
 - 默认只监听云主机的 `127.0.0.1:3100`，由 Nginx/Caddy 提供反向代理和访问控制。
 - 应用基础路径固定为 `/crm`；根路径不提供页面，可与现有站点共享同一 IP 和 Nginx 默认站点。

@@ -2,7 +2,7 @@ name: crm-settlement
 
 services:
   crm-platform:
-    image: crm-analysis-platform:local
+    image: ${CRM_IMAGE:-ghcr.io/hydintern3/crm-settlement:latest}
     build:
       context: ./platform
       dockerfile: Dockerfile

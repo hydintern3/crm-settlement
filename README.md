@@ -32,10 +32,11 @@ npm.cmd run verify
 
 ```bash
 cp .env.deploy.example .env
-docker compose up -d --build
+docker compose pull crm-platform
+docker compose up -d --no-build
 curl http://127.0.0.1:3100/crm/api/health
 ```
 
-应用固定挂载在 `/crm/`，可与同一 Nginx 下的现有网站共存。完整的 Nginx 合并、验证、更新和回滚步骤见 [`docs/cloud-host-deployment.md`](docs/cloud-host-deployment.md)。
+GitHub Actions 会构建 `linux/amd64` 镜像并发布到 `ghcr.io/hydintern3/crm-settlement`，云主机无需访问 Docker Hub 或 npm。应用固定挂载在 `/crm/`，可与同一 Nginx 下的现有网站共存。完整的镜像权限、Nginx 合并、验证、更新和回滚步骤见 [`docs/cloud-host-deployment.md`](docs/cloud-host-deployment.md)。
 
 线上构建不携带本地业务快照。毛利、目标、正式结算、收付、销账和发票等缺少输入时保持空状态，不生成模拟金额。

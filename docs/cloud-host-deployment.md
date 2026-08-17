@@ -1,30 +1,46 @@
 # 与 content-pipeline 共用云主机的完整部署步骤
 
-CRM 平台固定运行在 `/crm/`，内部端口为 `127.0.0.1:3100`。现有 `content-pipeline` 继续使用 `/` 和 `127.0.0.1:5000`，两者使用独立 Docker Compose 项目和网络。
+CRM 平台固定运行在 `/crm/`，内部地址为 `127.0.0.1:3100`。现有 `content-pipeline` 继续使用 `/` 和 `127.0.0.1:5000`。CRM 镜像由 GitHub Actions 在 `linux/amd64` 环境构建并发布到 GHCR，云主机不再访问 Docker Hub 或 npm。
 
-## 1. 部署前确认
+## 1. 发布 GHCR 镜像
 
-在开发电脑推送最新代码：
+在开发电脑推送 `main`：
 
 ```powershell
 git push origin main
 ```
 
-在云主机确认现有服务和目标端口：
+进入 GitHub 仓库的 **Actions** 页面，等待 `CI` 工作流全部通过。成功后会发布：
+
+```text
+ghcr.io/hydintern3/crm-settlement:latest
+ghcr.io/hydintern3/crm-settlement:<完整提交SHA>
+```
+
+第一次发布后，在 GitHub 个人主页的 **Packages → crm-settlement → Package settings** 检查可见性。仓库和镜像均不包含业务快照或密码，建议将该包设为 `Public`，这样云主机无需保存 GitHub令牌。
+
+如果包必须保持私有，在 GitHub 创建只有 `read:packages` 权限的访问令牌。不要把令牌写入仓库、`.env` 或命令历史。
+
+## 2. 云主机部署前确认
 
 ```bash
 sudo docker compose ls
 sudo docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}"
 sudo ss -lntp | grep ':3100 ' || true
-```
-
-3100 端口应当没有输出。记录当前首页状态，作为部署后的对照：
-
-```bash
 curl -I http://127.0.0.1/
 ```
 
-## 2. 获取或更新项目
+3100 端口应当没有监听；根路径应继续由 content-pipeline 正常响应。
+
+确认 GHCR 网络可达：
+
+```bash
+curl -I --max-time 15 https://ghcr.io/v2/
+```
+
+`401` 或 `405` 都表示 Registry 已成功响应。
+
+## 3. 获取或更新部署配置
 
 首次部署：
 
@@ -34,7 +50,7 @@ git clone https://github.com/hydintern3/crm-settlement.git /opt/crm-settlement
 cd /opt/crm-settlement
 ```
 
-如果目录已经存在：
+目录已经存在时：
 
 ```bash
 cd /opt/crm-settlement
@@ -42,37 +58,62 @@ git status --short
 git pull --ff-only
 ```
 
-`git status --short` 在更新前应当没有输出。然后查看实际部署版本：
+更新前 `git status --short` 应当没有输出。记录版本：
 
 ```bash
 git log -1 --oneline
 ```
 
-## 3. 配置独立内部端口
+## 4. 配置 Compose
 
 ```bash
 cd /opt/crm-settlement
 cp -n .env.deploy.example .env
-sed -i 's/^BIND_ADDRESS=.*/BIND_ADDRESS=127.0.0.1/' .env
-sed -i 's/^APP_PORT=.*/APP_PORT=3100/' .env
-cat .env
 ```
 
-预期内容：
+确保 `.env` 包含：
 
 ```dotenv
 BIND_ADDRESS=127.0.0.1
 APP_PORT=3100
+CRM_IMAGE=ghcr.io/hydintern3/crm-settlement:latest
 ```
 
-不要把 `BIND_ADDRESS` 改成 `0.0.0.0`，也不需要在云安全组开放 3100。
+已有 `.env` 缺少镜像配置时追加：
 
-## 4. 构建并启动 CRM
+```bash
+grep -q '^CRM_IMAGE=' .env || \
+  echo 'CRM_IMAGE=ghcr.io/hydintern3/crm-settlement:latest' >> .env
+```
+
+不要把 `BIND_ADDRESS` 改为 `0.0.0.0`，也不需要在云安全组开放 3100。
+
+## 5. 拉取预构建镜像
+
+公开包直接执行：
+
+```bash
+cd /opt/crm-settlement
+sudo docker compose pull crm-platform
+```
+
+如果返回 `denied` 或 `unauthorized`，说明 GHCR 包仍为私有。安全登录：
+
+```bash
+read -s -p 'GHCR token: ' GHCR_TOKEN; echo
+printf '%s' "$GHCR_TOKEN" | \
+  sudo docker login ghcr.io -u hydintern3 --password-stdin
+unset GHCR_TOKEN
+
+sudo docker compose pull crm-platform
+```
+
+## 6. 启动 CRM
 
 ```bash
 cd /opt/crm-settlement
 sudo docker compose config
-sudo docker compose up -d --build
+sudo docker compose up -d --no-build
 sudo docker compose ps
 curl --fail http://127.0.0.1:3100/crm/api/health
 ```
@@ -83,82 +124,60 @@ curl --fail http://127.0.0.1:3100/crm/api/health
 {"status":"ok","service":"crm-analysis-platform"}
 ```
 
-此时 CRM 只在主机内部可访问，尚未改变 Nginx。
+此过程只使用 GHCR 成品镜像，不执行 Dockerfile、Docker Hub 拉取或 npm 安装。
 
-## 5. 找到并备份现有 Nginx 配置
+## 7. 接入现有 Nginx
 
-查找当前转发到 content-pipeline 的配置文件：
-
-```bash
-sudo grep -RIl "proxy_pass http://127.0.0.1:5000" \
-  /etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d
-```
-
-选择实际生效的配置文件。可通过下面的命令确认其绝对路径：
+查找当前转发到 content-pipeline 的生效配置：
 
 ```bash
-readlink -f /etc/nginx/sites-enabled/default
+NGINX_ACTIVE=$(sudo grep -RIl \
+  "proxy_pass http://127.0.0.1:5000" \
+  /etc/nginx/sites-enabled /etc/nginx/conf.d | head -n1)
+NGINX_SITE=$(readlink -f "$NGINX_ACTIVE")
+echo "$NGINX_SITE"
 ```
 
-假设实际文件为 `/etc/nginx/sites-available/default`，先备份：
+备份实际配置：
 
 ```bash
-sudo cp -a /etc/nginx/sites-available/default \
-  /etc/nginx/sites-available/default.before-crm
+sudo cp -a "$NGINX_SITE" "${NGINX_SITE}.before-crm"
 ```
 
-如果实际文件名不同，后续命令必须使用查到的真实文件，不要照搬 `default`。
-
-## 6. 在现有 server 中增加 `/crm` 路由
-
-打开现有配置：
+安装仓库提供的路由片段：
 
 ```bash
-sudo nano /etc/nginx/sites-available/default
+sudo install -d -m 755 /etc/nginx/snippets
+sudo install -m 644 \
+  /opt/crm-settlement/deploy/nginx/crm-location.conf \
+  /etc/nginx/snippets/crm-location.conf
 ```
 
-在当前 `server { ... }` 内、现有的 `location /` 旁边加入以下两个区块。不要删除或修改原来转发到 `127.0.0.1:5000` 的 location：
+编辑现有站点：
+
+```bash
+sudo nano "$NGINX_SITE"
+```
+
+在当前 `server { ... }` 内、原有 `location /` 旁边加入：
 
 ```nginx
-location = /crm {
-    return 301 /crm/;
-}
-
-location /crm/ {
-    proxy_pass http://127.0.0.1:3100;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 120s;
-}
+include /etc/nginx/snippets/crm-location.conf;
 ```
 
-仓库中的 `deploy/nginx/crm-location.conf` 保存了相同片段，供对照使用。
-
-检查语法后平滑重载：
+不要删除或修改原来转发到 `127.0.0.1:5000` 的 location。检查并平滑重载：
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-只有 `nginx -t` 成功时才可以执行 reload。reload 不会停止现有 content-pipeline 容器。
-
-## 7. 验证两个项目同时工作
+## 8. 验证两个项目共存
 
 ```bash
-# 原 content-pipeline 根路径仍应正常响应
 curl -I http://127.0.0.1/
-
-# /crm 自动补齐末尾斜杠
 curl -I http://127.0.0.1/crm
-
-# CRM 健康检查经过 Nginx 成功
 curl --fail http://127.0.0.1/crm/api/health
-
-# 两个 Compose 项目均应运行
 sudo docker compose ls
 ```
 
@@ -168,22 +187,18 @@ sudo docker compose ls
 http://云主机IP/crm/
 ```
 
-如果公司已有该服务器的内部地址，也可以使用 `http://现有地址/crm/`。
-
-## 8. 访问与数据安全
-
-- `/crm` 只是路径隔离，不提供登录认证；它继承现有 Nginx、VPN、安全组或公司网关的访问范围。
-- 如果当前 80 端口对公网开放，CRM 路径也会对公网可见。正式使用前应通过公司 VPN、固定出口 IP、Nginx访问控制或统一身份网关进行限制。
-- Excel/CSV 只在各自浏览器本地解析，不上传服务器，也不会自动共享给其他同事。
-- 刷新页面后需要重新导入业务数据；服务器不保存 CRM 数据，无需备份业务数据库。
+`/crm` 只是路径隔离，不提供身份认证。如果 80 端口对公网开放，必须继续使用公司 VPN、安全组白名单、Nginx访问控制或统一身份网关。
 
 ## 9. 日常更新
+
+等待 GitHub Actions 成功发布新镜像后执行：
 
 ```bash
 cd /opt/crm-settlement
 git status --short
 git pull --ff-only
-sudo docker compose up -d --build
+sudo docker compose pull crm-platform
+sudo docker compose up -d --no-build
 sudo docker compose ps
 curl --fail http://127.0.0.1:3100/crm/api/health
 curl --fail http://127.0.0.1/crm/api/health
@@ -192,26 +207,31 @@ curl --fail http://127.0.0.1/crm/api/health
 查看日志：
 
 ```bash
-cd /opt/crm-settlement
 sudo docker compose logs --tail=200 -f crm-platform
 ```
 
-## 10. 回滚
+## 10. 按提交版本回滚
 
-如果 CRM 容器异常，先只停止 CRM，不影响 content-pipeline：
+GitHub Actions 同时发布提交 SHA 标签。把 `.env` 中的 `CRM_IMAGE` 改成已知正常版本：
+
+```dotenv
+CRM_IMAGE=ghcr.io/hydintern3/crm-settlement:<完整提交SHA>
+```
+
+然后执行：
+
+```bash
+cd /opt/crm-settlement
+sudo docker compose pull crm-platform
+sudo docker compose up -d --no-build
+curl --fail http://127.0.0.1:3100/crm/api/health
+```
+
+只停止 CRM：
 
 ```bash
 cd /opt/crm-settlement
 sudo docker compose down
 ```
 
-如果需要撤销 Nginx 路由：
-
-```bash
-sudo cp -a /etc/nginx/sites-available/default.before-crm \
-  /etc/nginx/sites-available/default
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-实际配置文件不是 `default` 时，使用第 5 步记录的真实路径及其备份文件。
+上述操作不会停止 content-pipeline。
