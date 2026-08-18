@@ -8,6 +8,12 @@ const config = JSON.parse(await readFile(resolve(root, "config/local-source.json
 const sourceDir = resolve(root, process.env.CRM_DATA_DIR || config.directory);
 const outputFile = resolve(root, config.output);
 
+function maskedLandline(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.length <= 4 ? "*".repeat(digits.length) : `****-${digits.slice(-4)}`;
+}
+
 function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -182,6 +188,11 @@ const safeRows = businessRows.slice(0, 500).map((row) => {
   marketingFee: number(row["增值"] || row["I 营销"]),
   paymentCycle: row["付费周期"] || row["付款周期"] || "",
   providerCategory: row["I 服务分类"] || "",
+  contactLandlineMasked: maskedLandline(row["联系人固话"] || row["联系人 固话"]),
+  calculationStatus: row["计算状态"] || row["计算 状态"] || "",
+  installmentCalculationFlag: row["分期计算标识"] || row["分期 计算标识"] || "",
+  removalType: row["拆机类型"] || row["拆机 类型"] || "",
+  userRemovalReason: row["用户拆机原因"] || row["用户 拆机原因"] || "",
   belowAuthorizedPrice: row["是否低于授权价"] || "",
   grossProfit: number(row["业务毛利（完成）"] || row["业务毛利(完成)"] || row["业务毛利"]),
 }); });

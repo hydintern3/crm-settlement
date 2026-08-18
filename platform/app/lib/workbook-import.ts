@@ -1,10 +1,17 @@
 import * as XLSX from "xlsx";
-import { buildSnapshot, toBusinessRow, type RawRow, type SheetSource, type Snapshot } from "./data-model";
+import { buildSnapshot, normalizeSnapshot, toBusinessRow, type BusinessRow, type RawRow, type SheetSource, type Snapshot } from "./data-model.ts";
 
 export type InspectedSheet = SheetSource & {
   id: string;
   columns: string[];
   rows: RawRow[];
+};
+
+export type VersionSnapshotSource = {
+  id: string;
+  label: string;
+  createdAt: string;
+  snapshot: Snapshot;
 };
 
 type BusinessCandidate = {
@@ -143,5 +150,45 @@ export function snapshotFromSheets(allSheets: InspectedSheet[], businessIds: str
     currentFile: selectedBusinessSheets.map((sheet) => `${sheet.fileName} / ${sheet.sheetName}`).join("；"),
     sheets: allSheets.map(({ fileName, sheetName, kind, rowCount }) => ({ fileName, sheetName, kind, rowCount })),
     deduplication: deduplicated.summary,
+  });
+}
+
+export function mergeVersionSnapshots(sources: VersionSnapshotSource[]): Snapshot {
+  if (sources.length < 2) throw new Error("请至少选择两个数据版本进行整合。");
+  const ordered = [...sources].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  const byDevice = new Map<string, BusinessRow>();
+  const blankKeyRows: BusinessRow[] = [];
+  const duplicateKeys = new Set<string>();
+  let inputRows = 0;
+  for (const source of ordered) {
+    const rows = normalizeSnapshot(source.snapshot).rows;
+    inputRows += rows.length;
+    for (const row of rows) {
+      if (!row.deviceCode) {
+        blankKeyRows.push(row);
+        continue;
+      }
+      if (byDevice.has(row.deviceCode)) duplicateKeys.add(row.deviceCode);
+      byDevice.set(row.deviceCode, row);
+    }
+  }
+  const rows = [...byDevice.values(), ...blankKeyRows];
+  if (!rows.length) throw new Error("所选数据版本没有可整合的业务记录。");
+  const files = [...new Set(ordered.flatMap((source) => source.snapshot.source.files))];
+  const sheets = ordered.flatMap((source) => source.snapshot.source.sheets ?? []);
+  return buildSnapshot(rows, {
+    label: "多个 CRM 全量版本整合",
+    files,
+    currentFile: ordered.map((source) => source.label).join("；"),
+    sheets,
+    deduplication: {
+      keyField: "设备编号",
+      inputRows,
+      outputRows: rows.length,
+      removedRows: inputRows - rows.length,
+      duplicateKeys: duplicateKeys.size,
+      blankKeyRows: blankKeyRows.length,
+      strategy: "按版本发布时间从旧到新整合；同一设备编号由较新的 CRM 全量版本整行覆盖；设备编号为空的记录全部保留",
+    },
   });
 }

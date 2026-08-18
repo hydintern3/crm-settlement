@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { createPasswordHash, createSession, readSession, verifyPassword } from "../app/lib/server/auth.ts";
-import { activateVersion, getCurrentData, listVersions, publishVersion } from "../app/lib/server/data-store.ts";
+import { activateVersion, composeVersions, getCurrentData, listVersions, publishVersion } from "../app/lib/server/data-store.ts";
 import { buildSnapshot, toBusinessRow } from "../app/lib/data-model.ts";
 
 test("password hashes and signed sessions reject wrong or tampered values", () => {
@@ -31,6 +31,12 @@ test("immutable versions publish, switch and persist through the active pointer"
     const second = await publishVersion({ files: [new File(["test-v2"], "v2.csv")], snapshot: makeSnapshot("D-2"), businessIds: ["v2.csv::Sheet1"], actor: "finance-admin" });
     assert.equal((await getCurrentData())?.version.id, second.id);
     assert.equal((await listVersions()).versions.length, 2);
+    const composed = await composeVersions({ sourceVersionIds: [first.id, second.id], label: "测试整合版本", actor: "finance-admin" });
+    assert.equal(composed.version.kind, "composed");
+    assert.deepEqual(composed.version.sourceVersionIds, [first.id, second.id]);
+    assert.equal(composed.snapshot.rows.length, 2);
+    assert.equal((await getCurrentData())?.version.id, composed.version.id);
+    assert.equal((await listVersions()).versions.length, 3);
     await activateVersion(first.id, "finance-admin", "测试回滚");
     const current = await getCurrentData();
     assert.equal(current?.version.id, first.id);

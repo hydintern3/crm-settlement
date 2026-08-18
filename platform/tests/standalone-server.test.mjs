@@ -85,12 +85,27 @@ test("standalone server exposes the health endpoint and CRM page", { timeout: 20
     const secondUpload = await upload("v2.csv", "D-2");
     const secondUploadBody = await secondUpload.json();
     assert.equal(secondUpload.status, 201, JSON.stringify(secondUploadBody));
+    const secondVersion = secondUploadBody.version.id;
+    const versionsV2 = await fetch(`${origin}/crm/api/data/versions`, { headers: { cookie } });
+    const historyV2 = await versionsV2.json();
+    assert.equal(historyV2.activeId, secondVersion);
+    assert.equal(historyV2.versions.length, 2);
+    assert.deepEqual(new Set(historyV2.versions.map((version) => version.id)), new Set([firstVersion, secondVersion]));
     const currentV2 = await fetch(`${origin}/crm/api/data/current`, { headers: { cookie } });
     assert.equal((await currentV2.json()).snapshot.rows[0].deviceCode, "D-2");
+    const compose = await fetch(`${origin}/crm/api/data/compose`, { method: "POST", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ sourceVersionIds: [firstVersion, secondVersion], label: "集成测试整合版" }) });
+    const composeBody = await compose.json();
+    assert.equal(compose.status, 201, JSON.stringify(composeBody));
+    assert.equal(composeBody.version.kind, "composed");
+    assert.equal(composeBody.snapshot.rows.length, 2);
+    assert.deepEqual(composeBody.version.sourceVersionIds, [firstVersion, secondVersion]);
     const activate = await fetch(`${origin}/crm/api/data/versions/${firstVersion}/activate`, { method: "POST", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ reason: "集成测试回滚" }) });
     assert.equal(activate.status, 200, await activate.text());
     const currentV1 = await fetch(`${origin}/crm/api/data/current`, { headers: { cookie } });
     assert.equal((await currentV1.json()).snapshot.rows[0].deviceCode, "D-1");
+    const historyV1 = await (await fetch(`${origin}/crm/api/data/versions`, { headers: { cookie } })).json();
+    assert.equal(historyV1.activeId, firstVersion);
+    assert.equal(historyV1.versions.length, 3);
 
     const rootPage = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(rootPage.status, 404);

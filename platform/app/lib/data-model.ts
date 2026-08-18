@@ -27,6 +27,11 @@ export type BusinessRow = {
   marketingFee: NumericValue;
   paymentCycle: string;
   providerCategory: string;
+  contactLandlineMasked: string;
+  calculationStatus: string;
+  installmentCalculationFlag: string;
+  removalType: string;
+  userRemovalReason: string;
   belowAuthorizedPrice: string;
   grossProfit: NumericValue;
 };
@@ -193,6 +198,13 @@ export function numericValue(value: unknown): NumericValue {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export function maskContactLandline(value: unknown): string {
+  const digits = textValue(value).replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 4) return "*".repeat(digits.length);
+  return `****-${digits.slice(-4)}`;
+}
+
 export function dateValue(value: unknown): string {
   if (value instanceof Date && Number.isFinite(value.getTime())) {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
@@ -249,6 +261,11 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     marketingFee: numericValue(first(row, ["增值", "营销增值费用", "I 营销", "I营销"])),
     paymentCycle: textValue(first(row, ["付费周期", "付款周期"])),
     providerCategory: textValue(first(row, ["I 服务分类", "I服务分类", "服务分类"])),
+    contactLandlineMasked: maskContactLandline(first(row, ["联系人固话", "联系人 固话", "联系人电话", "联系人 电话"])),
+    calculationStatus: textValue(first(row, ["计算状态", "计算 状态"])),
+    installmentCalculationFlag: textValue(first(row, ["分期计算标识", "分期 计算标识", "分期计算 标识"])),
+    removalType: textValue(first(row, ["拆机类型", "拆机 类型"])),
+    userRemovalReason: textValue(first(row, ["用户拆机原因", "用户 拆机原因", "用户拆机 原因"])),
     belowAuthorizedPrice: textValue(first(row, ["是否低于授权价"])),
     grossProfit: numericValue(first(row, ["业务毛利（完成）", "业务毛利(完成)", "业务毛利（未完成）", "业务毛利(未完成)", "业务毛利"])),
   };
@@ -581,6 +598,11 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     marketingFee: row.marketingFee === undefined ? null : row.marketingFee,
     paymentCycle: row.paymentCycle ?? "",
     providerCategory: row.providerCategory ?? "",
+    contactLandlineMasked: row.contactLandlineMasked ?? "",
+    calculationStatus: row.calculationStatus ?? "",
+    installmentCalculationFlag: row.installmentCalculationFlag ?? "",
+    removalType: row.removalType ?? "",
+    userRemovalReason: row.userRemovalReason ?? "",
     belowAuthorizedPrice: row.belowAuthorizedPrice ?? "",
     grossProfit: row.grossProfit === undefined ? null : row.grossProfit,
   }); }) : [];

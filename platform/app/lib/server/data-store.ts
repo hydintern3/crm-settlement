@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, readdir, rename, rm, writeFile } from "nod
 import { basename, resolve } from "node:path";
 import type { Snapshot } from "../data-model";
 import type { CurrentDataResponse, DataVersionManifest } from "../data-version";
+import { mergeVersionSnapshots } from "../workbook-import.ts";
 
 const VERSION_PATTERN = /^\d{8}T\d{6}Z-[a-f0-9]{12}$/;
 let mutationQueue: Promise<unknown> = Promise.resolve();
@@ -93,6 +94,7 @@ export async function publishVersion(input: {
       const snapshotText = `${JSON.stringify(input.snapshot)}\n`;
       const manifest: DataVersionManifest = {
         schemaVersion: 1,
+        kind: "upload",
         id,
         label: input.label?.trim().slice(0, 120) || `数据版本 ${id.slice(0, 15)}`,
         createdAt: new Date().toISOString(),
@@ -116,6 +118,61 @@ export async function publishVersion(input: {
   });
 }
 
+async function readVersionData(id: string): Promise<CurrentDataResponse> {
+  const directory = versionDirectory(id);
+  const [version, snapshotText] = await Promise.all([
+    readJson<DataVersionManifest>(resolve(directory, "manifest.json")),
+    readFile(resolve(directory, "snapshot.json"), "utf8"),
+  ]);
+  if (sha256(snapshotText) !== version.snapshotSha256) throw new Error(`数据版本 ${id} 快照校验失败`);
+  return { version, snapshot: JSON.parse(snapshotText) as Snapshot };
+}
+
+export async function composeVersions(input: { sourceVersionIds: string[]; label?: string; actor: string }) {
+  return serialize(async () => {
+    const target = await ensureStore();
+    const sourceVersionIds = [...new Set(input.sourceVersionIds)];
+    if (sourceVersionIds.length !== input.sourceVersionIds.length) throw new Error("数据源版本不能重复选择");
+    if (sourceVersionIds.length < 2) throw new Error("请至少选择两个数据版本进行整合");
+    if (sourceVersionIds.length > 20) throw new Error("一次最多整合 20 个数据版本");
+    const sources = await Promise.all(sourceVersionIds.map(readVersionData));
+    if (sources.some((source) => source.version.kind === "composed")) throw new Error("请选择原始上传版本，派生整合版本不能再次作为数据源");
+    const inputRows = sources.reduce((sum, source) => sum + source.snapshot.rows.length, 0);
+    if (inputRows > 250_000) throw new Error("所选版本合计超过 250,000 行，请减少数据源后重试");
+    const snapshot = mergeVersionSnapshots(sources.map(({ version, snapshot }) => ({ id: version.id, label: version.label, createdAt: version.createdAt, snapshot })));
+    const id = versionId();
+    const stage = resolve(target.staging, id);
+    await mkdir(stage, { recursive: true, mode: 0o700 });
+    try {
+      const snapshotText = `${JSON.stringify(snapshot)}\n`;
+      const manifest: DataVersionManifest = {
+        schemaVersion: 1,
+        kind: "composed",
+        id,
+        label: input.label?.trim().slice(0, 120) || `整合版本 ${id.slice(0, 15)}`,
+        createdAt: new Date().toISOString(),
+        createdBy: input.actor,
+        files: [],
+        selectedBusinessSheets: sources.flatMap((source) => source.version.selectedBusinessSheets),
+        selectedProviderSheet: null,
+        rowCount: snapshot.rows.length,
+        deduplication: snapshot.source.deduplication ?? null,
+        snapshotSha256: sha256(snapshotText),
+        sourceVersionIds,
+      };
+      await writeFile(resolve(stage, "snapshot.json"), snapshotText, { encoding: "utf8", mode: 0o600 });
+      await writeFile(resolve(stage, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+      await rename(stage, versionDirectory(id));
+      await appendFile(target.audit, `${JSON.stringify({ action: "compose", at: new Date().toISOString(), actor: input.actor, sources: sourceVersionIds, next: id, inputRows, outputRows: snapshot.rows.length })}\n`, { encoding: "utf8", mode: 0o600 });
+      await activateUnlocked(id, input.actor, "发布多数据源整合版本");
+      return { version: manifest, snapshot };
+    } catch (error) {
+      await rm(stage, { recursive: true, force: true });
+      throw error;
+    }
+  });
+}
+
 export async function listVersions() {
   const target = await ensureStore();
   let activeId: string | null = null;
@@ -131,13 +188,7 @@ export async function getCurrentData(): Promise<CurrentDataResponse | null> {
   const target = await ensureStore();
   let id: string;
   try { id = (await readJson<{ id: string }>(target.active)).id; } catch { return null; }
-  const directory = versionDirectory(id);
-  const [version, snapshotText] = await Promise.all([
-    readJson<DataVersionManifest>(resolve(directory, "manifest.json")),
-    readFile(resolve(directory, "snapshot.json"), "utf8"),
-  ]);
-  if (sha256(snapshotText) !== version.snapshotSha256) throw new Error("当前数据版本校验失败");
-  return { version, snapshot: JSON.parse(snapshotText) as Snapshot };
+  return readVersionData(id);
 }
 
 export function activateVersion(id: string, actor: string, reason = "管理员回滚/切换") {

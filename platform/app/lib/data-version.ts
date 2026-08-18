@@ -9,6 +9,7 @@ export type DataVersionFile = {
 
 export type DataVersionManifest = {
   schemaVersion: 1;
+  kind?: "upload" | "composed";
   id: string;
   label: string;
   createdAt: string;
@@ -19,6 +20,7 @@ export type DataVersionManifest = {
   rowCount: number;
   deduplication: Snapshot["source"]["deduplication"] | null;
   snapshotSha256: string;
+  sourceVersionIds?: string[];
 };
 
 export type CurrentDataResponse = { version: DataVersionManifest; snapshot: Snapshot };
