@@ -26,12 +26,18 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(sourceConfig, /\.\.\/csv_output/);
   assert.match(sourceConfig, /\.xlsx/);
   assert.doesNotMatch(pageSource, /demo-snapshot/);
+  assert.doesNotMatch(pageSource, /data\/local-snapshot\.json/);
+  assert.match(pageSource, /api\/auth\/session/);
+  assert.match(pageSource, /api\/data\/current/);
+  assert.match(pageSource, /DATA VERSIONS/);
   assert.match(pageSource, /EMPTY_SNAPSHOT/);
   assert.match(pageSource, /MultiSelectGrid/);
   assert.match(pageSource, /startLongPress/);
   assert.match(pageSource, /550/);
   assert.match(importSource, /\.xlsb/);
   assert.match(importSource, /businessIds/);
+  assert.match(importSource, /api\/data\/upload/);
+  assert.match(importSource, /发布数据版本/);
   assert.match(dataModelSource, /初始完工日期/);
   assert.match(dataModelSource, /initialCompletedDate \|\| rawCompletedDate/);
   assert.match(dataModelSource, /buildCompletionCohorts/);
@@ -42,6 +48,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(dataModelSource, /discountedTariff/);
   assert.match(dataModelSource, /serviceCodeII/);
   assert.match(dataModelSource, /applyDynamicCalculationRules/);
+  assert.match(dataModelSource, /classifyBusinessEvent/);
+  assert.match(dataModelSource, /计量规则兜底/);
+  assert.match(dataModelSource, /const baseYear = config\.baseDate/);
   assert.match(dataModelSource, /buildBusinessProgress/);
   assert.match(dataModelSource, /netMonthlyMetering/);
   assert.match(dataModelSource, /netAverageTariff/);
@@ -66,6 +75,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /供应商/);
   assert.match(pageSource, /II服务编号/);
   assert.match(pageSource, /crm-calculation-rules/);
+  assert.match(pageSource, /跟随当前日期/);
+  assert.match(pageSource, /源业务属性/);
   assert.match(reportTablesSource, /不生成模拟金额/);
   assert.match(reportTablesSource, /全年业务拆装情况/);
   assert.match(reportTablesSource, /完工批次留存分析/);

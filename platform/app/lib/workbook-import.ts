@@ -53,7 +53,10 @@ export async function inspectWorkbookFiles(files: File[]): Promise<InspectedShee
   let totalRows = 0;
   for (const file of supported) {
     try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true, dense: true, bookDeps: false, bookFiles: false, bookVBA: false, WTF: false });
+      const buffer = await file.arrayBuffer();
+      const workbook = /\.csv$/i.test(file.name)
+        ? XLSX.read(new TextDecoder("utf-8").decode(buffer), { type: "string", cellDates: true, dense: true, bookDeps: false, bookFiles: false, bookVBA: false, WTF: false })
+        : XLSX.read(buffer, { type: "array", cellDates: true, dense: true, bookDeps: false, bookFiles: false, bookVBA: false, WTF: false });
       if (sheets.length + workbook.SheetNames.length > MAX_SHEETS) throw new Error(`工作表总数超过 ${MAX_SHEETS} 个，请分批导入。`);
       for (const sheetName of workbook.SheetNames) {
         const worksheet = workbook.Sheets[sheetName];

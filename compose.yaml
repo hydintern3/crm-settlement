@@ -12,12 +12,21 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
+      CRM_DATA_DIR: /app/data
+      CRM_ADMIN_USERNAME: ${CRM_ADMIN_USERNAME:?请在.env中配置管理员账号}
+      CRM_ADMIN_PASSWORD_HASH: ${CRM_ADMIN_PASSWORD_HASH:?请在.env中配置管理员密码摘要}
+      CRM_SESSION_SECRET: ${CRM_SESSION_SECRET:?请在.env中配置至少32字节随机会话密钥}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3100}:3000"
     read_only: true
+    volumes:
+      - crm-data:/app/data
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+volumes:
+  crm-data:

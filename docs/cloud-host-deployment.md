@@ -77,7 +77,20 @@ cp -n .env.deploy.example .env
 BIND_ADDRESS=127.0.0.1
 APP_PORT=3100
 CRM_IMAGE=ghcr.io/hydintern3/crm-settlement:latest
+CRM_ADMIN_USERNAME=admin
+CRM_ADMIN_PASSWORD_HASH='scrypt$...'
+CRM_SESSION_SECRET=至少32字节随机值
 ```
+
+在可信开发机的 `platform/` 目录生成密码摘要（密码从标准输入读取）：
+
+```bash
+read -s -p 'CRM admin password: ' CRM_PASSWORD; echo
+printf '%s' "$CRM_PASSWORD" | npm run admin:hash -- --stdin
+unset CRM_PASSWORD
+```
+
+把输出写入云主机 `.env` 的 `CRM_ADMIN_PASSWORD_HASH`。会话密钥可用 `openssl rand -base64 48` 生成。不得把明文密码、摘要或会话密钥提交到 Git。
 
 已有 `.env` 缺少镜像配置时追加：
 
@@ -187,7 +200,15 @@ sudo docker compose ls
 http://云主机IP/crm/
 ```
 
-`/crm` 只是路径隔离，不提供身份认证。如果 80 端口对公网开放，必须继续使用公司 VPN、安全组白名单、Nginx访问控制或统一身份网关。
+`/crm` 现在要求管理员登录，但生产仍必须启用 HTTPS，并建议继续使用公司 VPN、安全组白名单或统一身份网关。没有 HTTPS 时浏览器不会发送生产环境的 Secure 会话 Cookie。
+
+首次登录后在“数据中心”上传表格并发布版本。数据写入 Docker 命名卷 `crm-data`，可用以下命令确认：
+
+```bash
+sudo docker volume inspect crm-settlement_crm-data
+```
+
+备份时先停止写入，再备份该卷；恢复后保持目录归属为容器内 `node` 用户。不要把卷内容复制进仓库或公开 Web 目录。
 
 ## 9. 日常更新
 
@@ -235,3 +256,5 @@ sudo docker compose down
 ```
 
 上述操作不会停止 content-pipeline。
+
+应用镜像回滚与业务数据回滚相互独立：镜像使用提交 SHA 回滚；业务数据在管理员“数据中心”重新激活历史版本。`docker compose down` 不删除数据卷，禁止在未备份时使用 `docker compose down -v`。

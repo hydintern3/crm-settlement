@@ -428,6 +428,22 @@ footer { font-size: 11px; }
 .quality-list span { font-size: 12px; }
 @keyframes status-pulse { to { transform: scale(1.35); opacity: .6; } }
 
+.login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top left, #edf5ff, #f7f8fb 48%, #eef1f6); }
+.login-card { width: min(420px, 100%); display: grid; gap: 16px; padding: 34px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.96); box-shadow: 0 24px 70px rgba(26,47,79,.14); }
+.login-card .brand-mark { width: 48px; height: 48px; }
+.login-card h1 { margin: 0; }
+.login-card p { margin: -8px 0 4px; color: var(--muted); font-size: 13px; }
+.login-card label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
+.login-card input, .sheet-picker input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
+.login-card input:focus, .sheet-picker input:focus { outline: 2px solid rgba(39,100,231,.18); border-color: var(--blue); }
+.login-error { padding: 10px 12px; border-radius: 8px; background: #fff1f2; color: #a83b4c; font-size: 12px; }
+.version-list { display: grid; gap: 10px; }
+.version-item { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.version-item.active { border-color: rgba(17,135,107,.38); background: #f2fbf8; }
+.version-item > div { min-width: 0; display: grid; gap: 4px; }
+.version-item strong { font-size: 13px; }
+.version-item span, .version-item small { overflow-wrap: anywhere; color: var(--muted); font-size: 11px; }
+
 @media (max-width: 1180px) {
   .metric-grid { grid-template-columns: repeat(3,1fr); }
   .report-grid { grid-template-columns: repeat(2,1fr); }
@@ -466,4 +482,5 @@ footer { font-size: 11px; }
   .dedup-banner small { text-align: left; }
   .quality-metric-grid { grid-template-columns: 1fr; }
   .calculation-grid, .rule-audit { grid-template-columns: 1fr; }
+  .version-item { align-items: flex-start; flex-direction: column; }
 }

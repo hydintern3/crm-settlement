@@ -1,6 +1,6 @@
 # 衡析 CRM 业务分析与结算管理平台
 
-首版内部数据工作台，支持本地目录同步、组合筛选、双线业务指标、负责人/服务商排名、明细查询和可扩展报表注册。
+内部数据工作台，支持管理员登录、服务器数据版本、组合筛选、双线业务指标、负责人/服务商排名、明细查询和可扩展报表注册。
 
 ## 本地运行
 
@@ -11,7 +11,7 @@ npm.cmd run sync:data
 npm.cmd run dev
 ```
 
-访问 `http://localhost:3000`。`npm run dev` 启动前也会自动同步一次。
+启动服务器前需配置 `CRM_ADMIN_USERNAME`、`CRM_ADMIN_PASSWORD_HASH` 和 `CRM_SESSION_SECRET`。密码摘要可用 `npm run admin:hash -- --stdin` 生成。访问 `http://localhost:3000/crm/`，登录后可在数据中心上传并发布版本。
 
 如需读取其他目录，可修改 `config/local-source.json`，或设置环境变量 `CRM_DATA_DIR`。目录必须是经过授权的数据目录。
 
@@ -19,7 +19,9 @@ npm.cmd run dev
 
 - 本地同步只生成平台所需的业务字段，不包含客户、联系人、手机号、地址、统一社会信用代码、证件或银行卡信息。
 - 本地快照为 `public/data/local-snapshot.json`，已在 `.gitignore` 中排除，不得提交或部署。
-- 线上部署默认不携带任何业务快照，首次打开显示空状态；用户只可在浏览器本地导入数据。
+- 线上镜像不携带任何业务快照；管理员发布的原文件、快照、版本清单和审计只保存在 `/app/data` 持久卷。
+- 仪表盘和所有数据 API 均要求管理员会话；健康检查和静态资源保持公开。
+- 历史数据版本不可变，回滚只切换活动版本指针，不覆盖或删除原文件。
 - 原始 Excel 和 CSV 均保持只读；平台不回写 BH 公式或源数据。
 
 ## 扩展报表
@@ -47,6 +49,7 @@ npm.cmd run verify
 - GitHub Actions 构建并验证 `linux/amd64` standalone 容器，随后发布到 `ghcr.io/hydintern3/crm-settlement`。
 - 生产云主机只拉取已验证镜像，不在服务器上访问 Docker Hub、npm 或执行应用构建。
 - 容器固定使用 Node.js 22.13.0，以非 root 用户运行，并提供 `/crm/api/health` 健康检查。
+- Compose 使用 `crm-data` 命名卷持久化版本；升级镜像前后不会清空该卷，删除卷前必须备份。
 - 默认只监听云主机的 `127.0.0.1:3100`，由 Nginx/Caddy 提供反向代理和访问控制。
 - 应用基础路径固定为 `/crm`；根路径不提供页面，可与现有站点共享同一 IP 和 Nginx 默认站点。
 - 发布前必须执行 `npm run verify`，并确认构建目录不包含 `data/local-snapshot.json`。

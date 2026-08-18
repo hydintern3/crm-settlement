@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { createPasswordHash } from "../app/lib/server/auth.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -31,9 +35,11 @@ async function waitForServer(url, child) {
 
 test("standalone server exposes the health endpoint and CRM page", { timeout: 20_000 }, async () => {
   const port = await reservePort();
+  const dataDirectory = await mkdtemp(join(tmpdir(), "crm-standalone-data-"));
+  const password = "standalone integration password";
   const child = spawn(process.execPath, ["dist/standalone/server.js"], {
     cwd: root,
-    env: { ...process.env, NODE_ENV: "production", HOST: "127.0.0.1", PORT: String(port) },
+    env: { ...process.env, NODE_ENV: "production", HOST: "127.0.0.1", PORT: String(port), CRM_DATA_DIR: dataDirectory, CRM_ADMIN_USERNAME: "admin", CRM_ADMIN_PASSWORD_HASH: createPasswordHash(password), CRM_SESSION_SECRET: "standalone-session-secret-that-is-at-least-32-bytes" },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -55,6 +61,37 @@ test("standalone server exposes the health endpoint and CRM page", { timeout: 20
     assert.match(html, /\/crm\/assets\//);
     assert.match(html, /\/crm\/og\.png/);
 
+    const origin = `http://127.0.0.1:${port}`;
+    const unauthorized = await fetch(`${origin}/crm/api/data/current`);
+    assert.equal(unauthorized.status, 401);
+    const login = await fetch(`${origin}/crm/api/auth/login`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify({ username: "admin", password }) });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie")?.split(";")[0];
+    assert.ok(cookie);
+
+    async function upload(name, device) {
+      const csv = `业务属性,业务名称,计量规则,月平均计量,设备编号,初始完工日期\n新装,测试业务,新增量,100,${device},2026-01-01\n`;
+      const form = new FormData();
+      form.append("files", new File([csv], name, { type: "text/csv" }));
+      form.set("businessIds", JSON.stringify([`${name}::Sheet1`]));
+      form.set("providerId", "");
+      form.set("label", `测试版本 ${device}`);
+      return fetch(`${origin}/crm/api/data/upload`, { method: "POST", headers: { cookie, origin }, body: form });
+    }
+    const firstUpload = await upload("v1.csv", "D-1");
+    const firstUploadBody = await firstUpload.json();
+    assert.equal(firstUpload.status, 201, JSON.stringify(firstUploadBody));
+    const firstVersion = firstUploadBody.version.id;
+    const secondUpload = await upload("v2.csv", "D-2");
+    const secondUploadBody = await secondUpload.json();
+    assert.equal(secondUpload.status, 201, JSON.stringify(secondUploadBody));
+    const currentV2 = await fetch(`${origin}/crm/api/data/current`, { headers: { cookie } });
+    assert.equal((await currentV2.json()).snapshot.rows[0].deviceCode, "D-2");
+    const activate = await fetch(`${origin}/crm/api/data/versions/${firstVersion}/activate`, { method: "POST", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ reason: "集成测试回滚" }) });
+    assert.equal(activate.status, 200, await activate.text());
+    const currentV1 = await fetch(`${origin}/crm/api/data/current`, { headers: { cookie } });
+    assert.equal((await currentV1.json()).snapshot.rows[0].deviceCode, "D-1");
+
     const rootPage = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(rootPage.status, 404);
   } catch (error) {
@@ -65,5 +102,6 @@ test("standalone server exposes the health endpoint and CRM page", { timeout: 20
       child.kill();
       await exited;
     }
+    await rm(dataDirectory, { recursive: true, force: true });
   }
 });

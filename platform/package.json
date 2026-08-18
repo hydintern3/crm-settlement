@@ -11,10 +11,11 @@
     "dev": "vinext dev",
     "build": "vinext build && node scripts/sanitize-build.mjs",
     "start": "node dist/standalone/server.js",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/standalone-server.test.mjs && node scripts/check-bundle-size.mjs",
+    "test": "npm run build && node --test tests/data-model.test.mjs tests/server-security.test.mjs tests/rendered-html.test.mjs tests/standalone-server.test.mjs && node scripts/check-bundle-size.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit --incremental false",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "admin:hash": "node scripts/hash-admin-password.mjs",
     "verify": "npm run lint && npm run typecheck && npm run audit:prod && npm test"
   },
   "dependencies": {

@@ -21,6 +21,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/dist/standalone ./
+RUN mkdir -p /app/data && chown node:node /app/data
 
 USER node
 EXPOSE 3000

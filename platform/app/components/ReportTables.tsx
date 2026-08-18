@@ -130,7 +130,7 @@ export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
     <ReportPanel label="MARKETING COST" title="营销增值费用分析" status="partial" description="金额取增值或营销字段；无有效金额时显示 --。">
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "金额", numeric: true }]} rows={marketing} />
     </ReportPanel>
-    <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新装与拆机按业务属性识别；拆装比为拆机线数 / 新装线数。">
+    <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新装、拆机、变更优先按源业务属性识别；属性为空或无法识别时，当前计量规则为新增量可兜底判为新装。拆装比为拆机线数 / 新装线数。">
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "installs", label: "新增数", numeric: true }, { key: "installAmount", label: "新增业务量", numeric: true }, { key: "removals", label: "拆机数", numeric: true }, { key: "removalAmount", label: "拆机业务量", numeric: true }, { key: "netLines", label: "净增数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "ratio", label: "拆装比", numeric: true }]} rows={netGrowth} />
     </ReportPanel>
   </section>;
@@ -171,7 +171,7 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     <ReportPanel label="TOP 10 PROVIDERS" title="服务商进单排名" description="按 I 服务编号汇总当前筛选记录，排名依据月平均计量。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(false)} />
     </ReportPanel>
-    <ReportPanel label="TOP 10 REMOVALS" title="服务商拆机排名" description="仅统计业务属性识别为拆机、退订或注销的记录。">
+    <ReportPanel label="TOP 10 REMOVALS" title="服务商拆机排名" description="仅统计统一业务判定为拆机的记录；明确的拆机、退订或注销不会被新增量兜底覆盖。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(true)} />
     </ReportPanel>
     <ReportPanel wide label="II SERVICE PROVIDERS" title="II服务商进单排名" status="partial" description="按II服务编号汇总；II服务编号为空的记录不纳入排名，也不会用供应商名称代替。">

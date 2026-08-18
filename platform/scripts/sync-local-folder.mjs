@@ -110,8 +110,15 @@ const providersByCode = new Map(
   providerRows.map((row) => [row["服务编号"], row]),
 );
 const totalAmount = businessRows.reduce((sum, row) => sum + (number(row["月平均计量"]) ?? 0), 0);
-const isRemoval = (row) => row["业务属性"].includes("拆机");
-const isInstall = (row) => row["业务属性"].includes("新装");
+const classifyBusinessEvent = (businessType = "", meteringRule = "") => {
+  if (/拆机|退订|注销/.test(businessType)) return { businessEvent: "拆机", businessEventSource: "业务属性" };
+  if (/变更|改造|迁移/.test(businessType)) return { businessEvent: "变更", businessEventSource: "业务属性" };
+  if (/新装|新增|开通/.test(businessType)) return { businessEvent: "新装", businessEventSource: "业务属性" };
+  if (meteringRule === "新增量") return { businessEvent: "新装", businessEventSource: "计量规则兜底" };
+  return { businessEvent: "待确认", businessEventSource: "待确认" };
+};
+const isRemoval = (row) => classifyBusinessEvent(row["业务属性"], row["计量规则"]).businessEvent === "拆机";
+const isInstall = (row) => classifyBusinessEvent(row["业务属性"], row["计量规则"]).businessEvent === "新装";
 const isActive = (row) => row["活跃状态"].includes("活跃") && !row["活跃状态"].includes("不");
 
 const monthlyMap = new Map(
@@ -148,8 +155,10 @@ for (const row of businessRows) {
 const safeRows = businessRows.slice(0, 500).map((row) => {
   const initialCompletedDate = normalizedDate(row["初始完工日期"]);
   const rawCompletedDate = normalizedDate(row["完工日期"]);
+  const businessEvent = classifyBusinessEvent(row["业务属性"], row["计量规则"]);
   return ({
   businessType: row["业务属性"],
+  ...businessEvent,
   businessName: row["业务名称"],
   owner: row["负责人"],
   provider: row["供应商"],
@@ -162,6 +171,7 @@ const safeRows = businessRows.slice(0, 500).map((row) => {
   rawCompletedDate,
   completedDate: initialCompletedDate || rawCompletedDate,
   completionDateSource: initialCompletedDate ? "初始完工日期" : rawCompletedDate ? "完工日期兜底" : "缺失",
+  sourceCurrentDate: normalizedDate(row["现日期"] || row["当前日期"]),
   activeStatus: row["活跃状态"],
   meteringRule: row["计量规则"],
   sourceMeteringRule: row["计量规则"],
@@ -193,7 +203,7 @@ const snapshot = {
     review: businessRows.filter((row) => {
       const provider = providersByCode.get(row["I 服务编号"]);
       const mayCalculate =
-        row["业务属性"] === "新装" &&
+        isInstall(row) &&
         row["付费周期"] === "月" &&
         row["活跃状态"] === "活跃" &&
         ["服务中", "激活服务"].includes(provider?.["服务状态"]) &&
