@@ -81,6 +81,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(workbookSource, /shouldReplace/);
   assert.match(styleSource, /Readability baseline/);
   assert.match(styleSource, /table \{ font-size: 12px/);
+  assert.match(styleSource, /\.filter-options \{ display: flex; flex-wrap: wrap;/);
+  assert.match(styleSource, /\.filter-options button \{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/);
   assert.match(chartSource, /SVGRenderer/);
   assert.match(chartSource, /renderer: "svg"/);
   assert.match(chartSource, /ConfigurableChart/);
