@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { CHART_SCHEMA_VERSION, DEFAULT_CHART_TEMPLATES, MAX_DASHBOARD_TEMPLATES, parseChartDraft, type ChartTemplate, type ChartTemplateDraft } from "../chart-template.ts";
+import { CHART_SCHEMA_VERSION, DEFAULT_CHART_TEMPLATES, MAX_DASHBOARD_TEMPLATES, migrateChartDraft, parseChartDraft, type ChartTemplate, type ChartTemplateDraft } from "../chart-template.ts";
 
 type DashboardFile = { schemaVersion: number; templates: ChartTemplate[] };
 let dashboardMutationQueue: Promise<unknown> = Promise.resolve();
@@ -32,11 +32,14 @@ async function readDashboard(): Promise<DashboardFile> {
   try {
     const parsed = JSON.parse(await readFile(target.templates, "utf8")) as Partial<DashboardFile>;
     if (!Array.isArray(parsed.templates)) throw new Error("总览模板文件格式无效");
-    const templates = parsed.templates.map((template) => ({
-      ...template,
-      ...parseChartDraft(template),
-      schemaVersion: CHART_SCHEMA_VERSION,
-    }));
+    const templates = parsed.templates.map((template) => {
+      const sourceSchemaVersion = Number(template.schemaVersion ?? parsed.schemaVersion ?? 1);
+      return {
+        ...template,
+        ...migrateChartDraft(parseChartDraft(template), sourceSchemaVersion),
+        schemaVersion: CHART_SCHEMA_VERSION,
+      };
+    });
     return { schemaVersion: CHART_SCHEMA_VERSION, templates };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { schemaVersion: CHART_SCHEMA_VERSION, templates: cloneDefaults() };

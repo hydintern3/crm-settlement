@@ -1,7 +1,8 @@
 import type { BusinessRow } from "./data-model";
 
-export const CHART_SCHEMA_VERSION = 1;
+export const CHART_SCHEMA_VERSION = 2;
 export const MAX_DASHBOARD_TEMPLATES = 30;
+export const DEFAULT_CHART_TOP_N = 50;
 
 export type ChartType = "bar" | "line" | "area" | "pie" | "donut" | "stackedBar" | "scatter";
 export type ChartSize = "half" | "wide";
@@ -124,7 +125,7 @@ export function defaultChartDraft(order = 100): ChartTemplateDraft {
     chartType: "bar",
     dimension: { field: "businessEvent" },
     measures: [{ field: "rows", aggregation: "count" }],
-    options: { topN: 10, includeEmpty: false, showOther: true, sort: "valueDesc", orientation: "vertical", showLabels: false, showLegend: true, smooth: false, size: "half", height: 300 },
+    options: { topN: DEFAULT_CHART_TOP_N, includeEmpty: false, showOther: true, sort: "valueDesc", orientation: "vertical", showLabels: false, showLegend: true, smooth: false, size: "half", height: 300 },
     pinned: true,
     archived: false,
     order,
@@ -175,7 +176,7 @@ export function parseChartDraft(value: unknown): ChartTemplateDraft {
     seriesField,
     measures,
     options: {
-      topN: integer(optionsSource.topN, 10, 3, 50),
+      topN: integer(optionsSource.topN, DEFAULT_CHART_TOP_N, 3, 50),
       includeEmpty: boolean(optionsSource.includeEmpty, false),
       showOther: boolean(optionsSource.showOther, true),
       sort: ["dimensionAsc", "dimensionDesc", "valueAsc", "valueDesc"].includes(String(optionsSource.sort)) ? optionsSource.sort as ChartTemplateDraft["options"]["sort"] : "valueDesc",
@@ -192,6 +193,13 @@ export function parseChartDraft(value: unknown): ChartTemplateDraft {
   };
   const issues = validateChartDraft(draft);
   if (issues.length) throw new Error(issues.join("；"));
+  return draft;
+}
+
+export function migrateChartDraft(draft: ChartTemplateDraft, sourceSchemaVersion: number) {
+  if (sourceSchemaVersion < 2 && draft.options.topN === 10 && draft.options.showOther) {
+    return { ...draft, options: { ...draft.options, topN: DEFAULT_CHART_TOP_N } };
+  }
   return draft;
 }
 
@@ -215,8 +223,8 @@ function systemTemplate(id: string, draft: ChartTemplateDraft): ChartTemplate {
 export const DEFAULT_CHART_TEMPLATES: readonly ChartTemplate[] = [
   systemTemplate("system-monthly-metering", { ...defaultChartDraft(10), title: "月平均计量趋势", description: "按有效完工月份汇总月平均计量", chartType: "bar", dimension: { field: "completedDate", timeGranularity: "month" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, sort: "dimensionAsc", size: "wide" } }),
   systemTemplate("system-metering-rule", { ...defaultChartDraft(20), title: "计量规则分布", description: "新增量、新量、存量和超期记录结构", chartType: "donut", dimension: { field: "meteringRule" }, measures: [{ field: "rows", aggregation: "count" }] }),
-  systemTemplate("system-owner-ranking", { ...defaultChartDraft(30), title: "负责人业绩", description: "负责人月平均计量 Top 10", dimension: { field: "owner" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "服务商进单", description: "供应商月平均计量 Top 10", dimension: { field: "provider" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
+  systemTemplate("system-owner-ranking", { ...defaultChartDraft(30), title: "负责人业绩", description: "负责人月平均计量 Top 50", dimension: { field: "owner" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
+  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "服务商进单", description: "供应商月平均计量 Top 50", dimension: { field: "provider" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
 ] as const;
 
 export function templateDraft(template: ChartTemplate): ChartTemplateDraft {

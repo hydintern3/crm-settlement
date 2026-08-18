@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildChartData } from "../app/lib/chart-aggregation.ts";
-import { defaultChartDraft, parseChartDraft, validateChartDraft } from "../app/lib/chart-template.ts";
+import { defaultChartDraft, migrateChartDraft, parseChartDraft, validateChartDraft } from "../app/lib/chart-template.ts";
 import { toBusinessRow } from "../app/lib/data-model.ts";
 
 const rows = [
@@ -57,6 +57,7 @@ test("series split and active rate are calculated from the same grouped records"
 });
 
 test("template parser constrains unsafe and incompatible configurations", () => {
+  assert.equal(defaultChartDraft().options.topN, 50);
   const parsed = parseChartDraft({ ...defaultChartDraft(), title: "  自定义图表  ", options: { ...defaultChartDraft().options, topN: 999 } });
   assert.equal(parsed.title, "自定义图表");
   assert.equal(parsed.options.topN, 50);
@@ -66,4 +67,14 @@ test("template parser constrains unsafe and incompatible configurations", () => 
   assert.throws(() => parseChartDraft({ ...defaultChartDraft(), chartType: "javascript" }), /不支持的图表类型/);
   assert.throws(() => parseChartDraft({ ...defaultChartDraft(), dimension: { field: "contactLandlineMasked" } }), /不支持的图表维度/);
   assert.equal(JSON.stringify(parsed).includes("javascript"), false);
+});
+
+test("legacy top 10 templates with other grouping migrate to top 50", () => {
+  const legacy = defaultChartDraft();
+  legacy.options.topN = 10;
+  legacy.options.showOther = true;
+  assert.equal(migrateChartDraft(legacy, 1).options.topN, 50);
+  legacy.options.showOther = false;
+  assert.equal(migrateChartDraft(legacy, 1).options.topN, 10);
+  assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, topN: 20, showOther: true } }, 1).options.topN, 20);
 });
