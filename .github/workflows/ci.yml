@@ -19,6 +19,9 @@ jobs:
     env:
       CRM_IMAGE: ghcr.io/hydintern3/crm-settlement:latest
       DOCKER_DEFAULT_PLATFORM: linux/amd64
+      CRM_ADMIN_USERNAME: ci-admin
+      CRM_ADMIN_PASSWORD_HASH: ci-healthcheck-only
+      CRM_SESSION_SECRET: ci-only-session-secret-at-least-32-bytes
     defaults:
       run:
         working-directory: platform
