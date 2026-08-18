@@ -434,8 +434,9 @@ footer { font-size: 11px; }
 .login-card h1 { margin: 0; }
 .login-card p { margin: -8px 0 4px; color: var(--muted); font-size: 13px; }
 .login-card label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
-.login-card input, .sheet-picker input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
-.login-card input:focus, .sheet-picker input:focus { outline: 2px solid rgba(39,100,231,.18); border-color: var(--blue); }
+.login-card input, .sheet-picker > label > input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; }
+.login-card input:focus, .sheet-picker > label > input:focus { outline: 2px solid rgba(39,100,231,.18); border-color: var(--blue); }
+.business-sheet-options input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; min-height: 0; padding: 0; }
 .login-error { padding: 10px 12px; border-radius: 8px; background: #fff1f2; color: #a83b4c; font-size: 12px; }
 .version-list { display: grid; gap: 10px; }
 .version-item { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
