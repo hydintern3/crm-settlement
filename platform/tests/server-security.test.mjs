@@ -7,6 +7,8 @@ import test from "node:test";
 import { createPasswordHash, createSession, readSession, verifyPassword } from "../app/lib/server/auth.ts";
 import { activateVersion, composeVersions, getCurrentData, listVersions, publishVersion } from "../app/lib/server/data-store.ts";
 import { buildSnapshot, toBusinessRow } from "../app/lib/data-model.ts";
+import { createChartTemplate, listChartTemplates, reorderChartTemplates, updateChartTemplate } from "../app/lib/server/dashboard-store.ts";
+import { defaultChartDraft, templateDraft } from "../app/lib/chart-template.ts";
 
 test("password hashes and signed sessions reject wrong or tampered values", () => {
   process.env.CRM_ADMIN_USERNAME = "finance-admin";
@@ -41,6 +43,30 @@ test("immutable versions publish, switch and persist through the active pointer"
     const current = await getCurrentData();
     assert.equal(current?.version.id, first.id);
     assert.equal(current?.snapshot.rows[0].deviceCode, "D-1");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("dashboard templates persist independently with revision conflict protection", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "crm-dashboard-test-"));
+  process.env.CRM_DATA_DIR = directory;
+  try {
+    assert.equal((await listChartTemplates()).length, 4);
+    const draft = defaultChartDraft(50);
+    draft.title = "测试自定义图表";
+    const created = await createChartTemplate(draft, "finance-admin");
+    assert.equal(created.revision, 1);
+    assert.equal((await listChartTemplates()).length, 5);
+    const changed = templateDraft(created);
+    changed.description = "修改后的口径说明";
+    const updated = await updateChartTemplate(created.id, changed, created.revision, "finance-admin");
+    assert.equal(updated.revision, 2);
+    assert.equal(updated.description, "修改后的口径说明");
+    await assert.rejects(() => updateChartTemplate(created.id, changed, 1, "finance-admin"), (error) => error instanceof Response && error.status === 409);
+    const pinned = (await listChartTemplates()).filter((template) => template.pinned && !template.archived).reverse();
+    const reordered = await reorderChartTemplates(pinned.map((template) => template.id), "finance-admin");
+    assert.equal(reordered.filter((template) => template.pinned && !template.archived)[0].id, pinned[0].id);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

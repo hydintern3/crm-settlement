@@ -6,11 +6,15 @@ import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, 
 import { applyDynamicCalculationRules, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
 import { BASE_PATH } from "./lib/deployment";
 import type { DataVersionManifest } from "./lib/data-version";
+import { buildChartData } from "./lib/chart-aggregation";
+import { CHART_TYPE_LABELS, DEFAULT_CHART_TEMPLATES, templateDraft, type ChartTemplate, type ChartTemplateDraft, type DimensionField } from "./lib/chart-template";
 
 const LazyImportDialog = lazy(() => import("./components/ImportDialog").then((module) => ({ default: module.ImportDialog })));
 const LazyMonthlyChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.MonthlyChart })));
 const LazyRankingChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.RankingChart })));
 const LazyRuleChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.RuleChart })));
+const LazyConfigurableChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.ConfigurableChart })));
+const LazyChartBuilder = lazy(() => import("./components/ChartBuilder").then((module) => ({ default: module.ChartBuilder })));
 
 const NAV_ITEMS = [
   ["总览", "总盘与关键指标"], ["统一查询", "明细筛选与导出"], ["业务分析", "趋势与计量结构"], ["销售分析", "负责人业绩与排名"],
@@ -132,6 +136,25 @@ function Panel({ label, title, aside, children, className = "" }: { label: strin
   return <article className={`panel ${className}`}><div className="panel-header"><div><span className="section-label">{label}</span><h2>{title}</h2></div>{aside}</div>{children}</article>;
 }
 
+function DashboardChartCard({ template, rows, editing, first, last, onEdit, onTogglePin, onArchive, onMove, onSelect, onViewData }: { template: ChartTemplate; rows: BusinessRow[]; editing: boolean; first: boolean; last: boolean; onEdit: () => void; onTogglePin: () => void; onArchive: () => void; onMove: (direction: -1 | 1) => void; onSelect: (field: DimensionField, value: string) => void; onViewData: () => void }) {
+  const data = useMemo(() => buildChartData(rows, template), [rows, template]);
+  const actions = editing ? <div className="chart-card-actions"><button disabled={first} title="前移" onClick={() => onMove(-1)}>↑</button><button disabled={last} title="后移" onClick={() => onMove(1)}>↓</button><button onClick={onEdit}>编辑</button><button onClick={onTogglePin}>取消固定</button><button className="danger" onClick={onArchive}>归档</button></div> : <div className="chart-view-actions"><button onClick={onViewData}>查看数据</button><span className="tag">{CHART_TYPE_LABELS[template.chartType]}</span></div>;
+  return <Panel label="CUSTOM ANALYSIS" title={template.title} className={`dashboard-chart ${template.options.size === "wide" ? "wide-panel" : ""}`} aside={actions}>
+    <div className="chart-meta"><span>{template.description || "基于当前筛选结果实时计算"}</span><small>{data.recordCount.toLocaleString("zh-CN")} 条记录 · {data.groupCount} 个分组</small></div>
+    <Suspense fallback={<ChartFallback />}><LazyConfigurableChart data={data} template={template} onSelect={(value) => value && value !== "其他" && value !== "--" && onSelect(template.dimension.field, value)} /></Suspense>
+    {data.warnings.length ? <div className="chart-warnings">{data.warnings.map((warning) => <span key={warning}>{warning}</span>)}</div> : null}
+  </Panel>;
+}
+
+function TemplateManager({ templates, onEdit, onDuplicate, onTogglePin, onArchive }: { templates: ChartTemplate[]; onEdit: (template: ChartTemplate) => void; onDuplicate: (template: ChartTemplate) => void; onTogglePin: (template: ChartTemplate) => void; onArchive: (template: ChartTemplate) => void }) {
+  return <Panel label="TEMPLATE LIBRARY" title="图表模板管理" className="wide-panel"><p className="panel-note">模板只保存图表配置，不保存业务统计值；数据版本或筛选变化后会自动重算。</p><div className="template-list">{templates.length ? templates.map((template) => <article key={template.id} className={template.archived ? "archived" : ""}><div><strong>{template.title}</strong><span>{CHART_TYPE_LABELS[template.chartType]} · {template.pinned && !template.archived ? "已固定" : template.archived ? "已归档" : "未固定"} · 修订 {template.revision}</span></div><div><button className="ghost-button" onClick={() => onEdit(template)}>编辑</button><button className="ghost-button" onClick={() => onDuplicate(template)}>复制</button><button className="ghost-button" onClick={() => onTogglePin(template)}>{template.archived ? "恢复并固定" : template.pinned ? "取消固定" : "固定到总览"}</button>{!template.archived && <button className="clear-button" onClick={() => onArchive(template)}>归档</button>}</div></article>) : <div className="chart-empty"><span>暂无图表模板</span></div>}</div></Panel>;
+}
+
+function ChartDataDialog({ template, rows, onClose }: { template: ChartTemplate; rows: BusinessRow[]; onClose: () => void }) {
+  const data = useMemo(() => buildChartData(rows, template), [rows, template]);
+  return <div className="chart-builder-overlay" role="dialog" aria-modal="true" aria-label={`${template.title} 聚合数据`}><section className="chart-data-dialog"><header><div><span className="section-label">AGGREGATED DATA</span><h2>{template.title} · 聚合数据</h2><p>{data.recordCount.toLocaleString("zh-CN")} 条筛选记录 · {data.groupCount} 个分组 · 单位：{data.unit}</p></div><button className="clear-button" onClick={onClose}>关闭</button></header><div className="table-scroll"><table><thead><tr><th>维度</th>{data.series.map((series) => <th className="number" key={series.name}>{series.name}</th>)}</tr></thead><tbody>{data.categories.map((category, index) => <tr key={category}><td>{category}</td>{data.series.map((series) => <td className="number" key={series.name}>{series.values[index] === null ? "--" : Number(series.values[index]).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</td>)}</tr>)}</tbody></table></div>{data.warnings.map((warning) => <p className="preview-warning" key={warning}>{warning}</p>)}</section></div>;
+}
+
 function MultiSelectGrid({ label, options, selected, onChange, limit = 12 }: { label: string; options: string[]; selected: string[]; onChange: (next: string[]) => void; limit?: number }) {
   const [expanded, setExpanded] = useState(false);
   function toggle(option: string) {
@@ -205,6 +228,13 @@ export default function Home() {
   const [showImport, setShowImport] = useState(false);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [chartTemplates, setChartTemplates] = useState<ChartTemplate[]>([]);
+  const [dashboardEditing, setDashboardEditing] = useState(false);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [builderTemplate, setBuilderTemplate] = useState<ChartTemplate | null | undefined>(undefined);
+  const [chartDataTemplate, setChartDataTemplate] = useState<ChartTemplate | null>(null);
+  const [chartSaving, setChartSaving] = useState(false);
+  const [chartNotice, setChartNotice] = useState<CenterNotice>(null);
   const [currentDate, setCurrentDate] = useState(() => localDateISO());
   const [calculationRules, setCalculationRules] = useState<CalculationRuleConfig>(() => {
     if (typeof window === "undefined") return DEFAULT_CALCULATION_RULES;
@@ -227,9 +257,10 @@ export default function Home() {
         if (!sessionResponse.ok) throw new Error("unauthorized");
         const session = await sessionResponse.json() as { username: string };
         setAdmin(session.username);
-        const [currentResponse, versionsResponse] = await Promise.all([
+        const [currentResponse, versionsResponse, templatesResponse] = await Promise.all([
           fetch(`${BASE_PATH}/api/data/current`, { cache: "no-store" }),
           fetch(`${BASE_PATH}/api/data/versions`, { cache: "no-store" }),
+          fetch(`${BASE_PATH}/api/dashboard/templates`, { cache: "no-store" }),
         ]);
         if (currentResponse.ok) {
           const current = await currentResponse.json() as { snapshot: Partial<Snapshot>; version: DataVersionManifest };
@@ -243,6 +274,10 @@ export default function Home() {
           setVersions(history.versions);
           setActiveVersionId(history.activeId);
         }
+        if (templatesResponse.ok) {
+          const dashboard = await templatesResponse.json() as { templates: ChartTemplate[] };
+          setChartTemplates(dashboard.templates);
+        } else setChartTemplates(structuredClone(DEFAULT_CHART_TEMPLATES) as ChartTemplate[]);
       } catch {
         setAdmin(null);
         setSnapshot(EMPTY_SNAPSHOT);
@@ -355,11 +390,97 @@ export default function Home() {
     }
   }
 
+  async function saveChartTemplate(draft: ChartTemplateDraft) {
+    setChartSaving(true);
+    setChartNotice(null);
+    try {
+      const editing = builderTemplate ?? null;
+      const response = await fetch(editing ? `${BASE_PATH}/api/dashboard/templates/${encodeURIComponent(editing.id)}` : `${BASE_PATH}/api/dashboard/templates`, {
+        method: editing ? "PUT" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(editing ? { template: draft, revision: editing.revision } : { template: draft }),
+      });
+      const result = await response.json() as { template?: ChartTemplate; error?: string };
+      if (!response.ok || !result.template) throw new Error(result.error || "图表模板保存失败");
+      setChartTemplates((templates) => editing ? templates.map((template) => template.id === result.template!.id ? result.template! : template) : [...templates, result.template!].sort((left, right) => left.order - right.order));
+      setBuilderTemplate(undefined);
+      setChartNotice({ tone: "success", text: `图表“${result.template.title}”已保存${result.template.pinned ? "并固定到总览" : ""}。` });
+    } catch (error) {
+      setChartNotice({ tone: "error", text: error instanceof Error ? error.message : "图表模板保存失败" });
+    } finally {
+      setChartSaving(false);
+    }
+  }
+
+  async function duplicateChart(template: ChartTemplate) {
+    setChartNotice(null);
+    const draft = templateDraft(template);
+    draft.title = `${template.title} 副本`.slice(0, 80);
+    draft.pinned = false;
+    draft.archived = false;
+    draft.order = Math.max(0, ...chartTemplates.map((item) => item.order)) + 10;
+    try {
+      const response = await fetch(`${BASE_PATH}/api/dashboard/templates`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ template: draft }) });
+      const result = await response.json() as { template?: ChartTemplate; error?: string };
+      if (!response.ok || !result.template) throw new Error(result.error || "模板复制失败");
+      setChartTemplates((templates) => [...templates, result.template!].sort((left, right) => left.order - right.order));
+      setChartNotice({ tone: "success", text: `已复制为“${result.template.title}”，当前未固定到总览。` });
+    } catch (error) {
+      setChartNotice({ tone: "error", text: error instanceof Error ? error.message : "模板复制失败" });
+    }
+  }
+
+  async function updateChartState(template: ChartTemplate, draft: ChartTemplateDraft, successText: string) {
+    setChartNotice(null);
+    try {
+      const response = await fetch(`${BASE_PATH}/api/dashboard/templates/${encodeURIComponent(template.id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ template: draft, revision: template.revision }) });
+      const result = await response.json() as { template?: ChartTemplate; error?: string };
+      if (!response.ok || !result.template) throw new Error(result.error || "模板更新失败");
+      setChartTemplates((templates) => templates.map((item) => item.id === result.template!.id ? result.template! : item));
+      setChartNotice({ tone: "success", text: successText });
+    } catch (error) {
+      setChartNotice({ tone: "error", text: error instanceof Error ? error.message : "模板更新失败" });
+    }
+  }
+
+  function toggleChartPin(template: ChartTemplate) {
+    const next = templateDraft(template);
+    next.archived = false;
+    next.pinned = template.archived || !template.pinned;
+    void updateChartState(template, next, next.pinned ? `“${template.title}”已固定到总览。` : `“${template.title}”已取消固定。`);
+  }
+
+  function archiveChart(template: ChartTemplate) {
+    if (!window.confirm(`确认归档图表“${template.title}”？\n\n归档后不会显示在总览，但配置和审计记录仍会保留。`)) return;
+    const next = templateDraft(template);
+    next.archived = true;
+    next.pinned = false;
+    void updateChartState(template, next, `“${template.title}”已归档。`);
+  }
+
+  async function moveChart(template: ChartTemplate, direction: -1 | 1) {
+    const pinned = chartTemplates.filter((item) => item.pinned && !item.archived).sort((left, right) => left.order - right.order);
+    const index = pinned.findIndex((item) => item.id === template.id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= pinned.length) return;
+    [pinned[index], pinned[target]] = [pinned[target], pinned[index]];
+    setChartNotice(null);
+    try {
+      const response = await fetch(`${BASE_PATH}/api/dashboard/templates`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderedIds: pinned.map((item) => item.id) }) });
+      const result = await response.json() as { templates?: ChartTemplate[]; error?: string };
+      if (!response.ok || !result.templates) throw new Error(result.error || "图表排序失败");
+      setChartTemplates(result.templates);
+    } catch (error) {
+      setChartNotice({ tone: "error", text: error instanceof Error ? error.message : "图表排序失败" });
+    }
+  }
+
   async function logout() {
     await fetch(`${BASE_PATH}/api/auth/logout`, { method: "POST" }).catch(() => undefined);
     setAdmin(null);
     setSnapshot(EMPTY_SNAPSHOT);
     setVersions([]);
+    setChartTemplates([]);
   }
 
   if (admin === undefined || !snapshot) return <main className="loading-screen"><div className="loading-mark">CRM</div><p>正在验证管理员会话…</p></main>;
@@ -383,7 +504,32 @@ export default function Home() {
   function navigate(name: ViewName) { setActiveNav(name); window.history.replaceState(null, "", `#${encodeURIComponent(name)}`); }
   function selectRule(name: string) { setFilters((value) => ({ ...value, rules: [name] })); navigate("统一查询"); }
   function selectRank(name: string, field: "owner" | "provider") { setFilters((value) => field === "owner" ? ({ ...value, owners: [name] }) : ({ ...value, keyword: name })); navigate(field === "owner" ? "销售分析" : "服务商分析"); }
+  function selectChartValue(field: DimensionField, value: string) {
+    setFilters((current) => {
+      if (field === "businessEvent") return { ...current, types: [value] };
+      if (field === "owner") return { ...current, owners: [value] };
+      if (field === "provider") return { ...current, providers: [value] };
+      if (field === "businessName") return { ...current, businessNames: [value] };
+      if (field === "activeStatus") return { ...current, statuses: [value] };
+      if (field === "meteringRule") return { ...current, rules: [value] };
+      if (field === "paymentCycle") return { ...current, paymentCycles: [value] };
+      if (field === "providerCategory") return { ...current, providerCategories: [value] };
+      if (field === "calculationStatus") return { ...current, calculationStatuses: [value] };
+      if (field === "installmentCalculationFlag") return { ...current, installmentFlags: [value] };
+      if (field === "removalType") return { ...current, removalTypes: [value] };
+      if (field === "completedDate") {
+        const year = value.match(/^(\d{4})/)?.[1];
+        const month = value.match(/^\d{4}-(\d{2})$/)?.[1];
+        const quarter = value.match(/^\d{4}-Q([1-4])$/)?.[1];
+        const quarterMonths = quarter ? Array.from({ length: 3 }, (_, index) => String((Number(quarter) - 1) * 3 + index + 1).padStart(2, "0")) : current.months;
+        return { ...current, years: year ? [year] : current.years, months: month ? [month] : quarter ? quarterMonths : current.months };
+      }
+      return { ...current, keyword: value };
+    });
+    navigate("统一查询");
+  }
   const moreFilterCount = filters.providers.length + filters.businessNames.length + filters.services.length + filters.servicesII.length + filters.paymentCycles.length + filters.providerCategories.length + filters.calculationStatuses.length + filters.installmentFlags.length + filters.removalTypes.length;
+  const pinnedTemplates = chartTemplates.filter((template) => template.pinned && !template.archived).sort((left, right) => left.order - right.order);
 
   const filterBar = <section className="filter-bar"><div className="filter-toolbar"><label className="search-box"><span>⌕</span><input value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} placeholder="搜索业务、服务、拆机原因、固话尾号…" /></label><span className="filter-tip">点击可多选，长按约半秒切换为单选</span><button className="ghost-button filter-toggle" onClick={() => setShowMoreFilters((value) => !value)}>{showMoreFilters ? "收起扩展筛选" : `更多筛选${moreFilterCount ? `（${moreFilterCount}）` : ""}`}</button><button className="clear-button" onClick={() => setFilters({ ...EMPTY_FILTERS })}>重置筛选</button></div><div className="filter-grid">
     <MultiSelectGrid label="完工年份" options={years} selected={filters.years} onChange={(years) => setFilters((value) => ({ ...value, years }))} />
@@ -406,7 +552,7 @@ export default function Home() {
   </div></section>;
 
   let content: React.ReactNode;
-  if (activeNav === "总览") content = <><Metrics rows={filteredRows} /><section className="dashboard-grid"><Panel label="MONTHLY TREND" title="月平均计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="METERING RULE" title="计量规则分布" aside={<span className="tag">点击可下钻</span>}><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel><Panel label="SALES PERFORMANCE" title="负责人业绩"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="PROVIDER RANKING" title="服务商进单"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "provider")} /></Panel></section></>;
+  if (activeNav === "总览") content = <><section className="dashboard-toolbar"><div><strong>自定义分析总览</strong><span>所有图表基于当前筛选的 {filteredRows.length.toLocaleString("zh-CN")} 条记录实时重算</span></div><div><button className="ghost-button" onClick={() => setShowTemplateManager((value) => !value)}>{showTemplateManager ? "收起模板管理" : "管理模板"}</button><button className="ghost-button" onClick={() => setDashboardEditing((value) => !value)}>{dashboardEditing ? "完成排版" : "编辑总览"}</button><button className="primary-button" onClick={() => setBuilderTemplate(null)}>＋ 新建图表</button></div></section>{chartNotice && <div className={`center-notice ${chartNotice.tone}`}>{chartNotice.text}</div>}{showTemplateManager && <TemplateManager templates={chartTemplates} onEdit={(template) => setBuilderTemplate(template)} onDuplicate={(template) => void duplicateChart(template)} onTogglePin={toggleChartPin} onArchive={archiveChart} />}<Metrics rows={filteredRows} />{pinnedTemplates.length ? <section className="dashboard-grid custom-dashboard-grid">{pinnedTemplates.map((template, index) => <DashboardChartCard key={`${template.id}-${template.revision}`} template={template} rows={filteredRows} editing={dashboardEditing} first={index === 0} last={index === pinnedTemplates.length - 1} onEdit={() => setBuilderTemplate(template)} onTogglePin={() => toggleChartPin(template)} onArchive={() => archiveChart(template)} onMove={(direction) => void moveChart(template, direction)} onSelect={selectChartValue} onViewData={() => setChartDataTemplate(template)} />)}</section> : <Panel label="EMPTY DASHBOARD" title="总览还没有固定图表" className="wide-panel"><div className="chart-empty"><span>点击“新建图表”，配置维度和指标后固定到总览。</span></div></Panel>}</>;
   else if (activeNav === "统一查询") content = <Panel label="DETAIL QUERY" title="业务明细" aside={<button className="primary-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出筛选结果</button>}><p className="panel-note">筛选、分页和导出均基于当前真实数据；空字段统一显示为 --。</p><DataTable rows={filteredRows} /></Panel>;
   else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} /><BusinessProgressTables rows={filteredRows} rules={effectiveCalculationRules} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section><BusinessReportTables rows={filteredRows} /></>;
   else if (activeNav === "销售分析") content = <><section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SalesReportTables rows={filteredRows} /></>;
@@ -418,5 +564,7 @@ export default function Home() {
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">衡</div><div><strong>衡析</strong><span>CRM 业务分析平台</span></div></div><nav>{NAV_ITEMS.map(([name, description], index) => <button key={name} className={activeNav === name ? "active" : ""} onClick={() => navigate(name)}><span className="nav-icon">{String(index + 1).padStart(2, "0")}</span><span><strong>{name}</strong><small>{description}</small></span></button>)}</nav><div className="sidebar-foot"><i className={snapshot.mode === "empty" ? "empty" : ""} /><div><strong>{snapshot.mode === "empty" ? "等待导入数据" : "数据已连接"}</strong><small>{snapshot.source.currentFile}</small></div></div></aside>
     <main className="main"><header className="topbar"><div><p className="eyebrow">BUSINESS INTELLIGENCE · 2026</p><h1>{activeNav}</h1></div><div className="top-actions"><span className="sync-state">数据更新：{updated}</span><button className="ghost-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出当前数据</button><button className="primary-button" onClick={() => setShowImport(true)}>＋ 导入数据</button></div></header>{activeNav !== "数据中心" && filterBar}{activeNav !== "数据中心" && snapshot.source.deduplication && <div className="dedup-banner"><div><strong>已按设备编号去重</strong><span>输入 {snapshot.source.deduplication.inputRows} 条，保留 {snapshot.source.deduplication.outputRows} 条，排除 {snapshot.source.deduplication.removedRows} 条重复记录。</span></div><small>{snapshot.source.deduplication.strategy}</small></div>}{activeNav === "数据中心" ? content : snapshot.mode === "empty" ? <AnalyticsPlaceholder onImport={() => setShowImport(true)} /> : content}<footer><span>缺失数据统一显示 -- · 不推断脱敏或已清空字段 · 结算结果仅供内部工作分流</span><span>BH 逻辑只读取结果，不回写原始公式</span></footer></main>
     {showImport ? <Suspense fallback={null}><LazyImportDialog open onClose={() => setShowImport(false)} onImported={(data) => { setSnapshot(data); setFilters(EMPTY_FILTERS); setCenterNotice({ tone: "success", text: "新数据版本已发布并自动激活，旧版本仍保留在历史列表中。" }); void refreshServerData().catch((error) => setCenterNotice({ tone: "error", text: error instanceof Error ? error.message : "版本列表刷新失败" })); }} /></Suspense> : null}
+    {builderTemplate !== undefined ? <Suspense fallback={null}><LazyChartBuilder rows={filteredRows} template={builderTemplate} saving={chartSaving} onClose={() => setBuilderTemplate(undefined)} onSave={saveChartTemplate} /></Suspense> : null}
+    {chartDataTemplate ? <ChartDataDialog template={chartDataTemplate} rows={filteredRows} onClose={() => setChartDataTemplate(null)} /> : null}
   </div>;
 }

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createPasswordHash } from "../app/lib/server/auth.ts";
+import { defaultChartDraft } from "../app/lib/chart-template.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -68,6 +69,24 @@ test("standalone server exposes the health endpoint and CRM page", { timeout: 20
     assert.equal(login.status, 200);
     const cookie = login.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie);
+
+    const defaultTemplatesResponse = await fetch(`${origin}/crm/api/dashboard/templates`, { headers: { cookie } });
+    const defaultTemplates = await defaultTemplatesResponse.json();
+    assert.equal(defaultTemplatesResponse.status, 200);
+    assert.equal(defaultTemplates.templates.length, 4);
+    const chartDraft = defaultChartDraft(50);
+    chartDraft.title = "集成测试图表";
+    const chartCreateResponse = await fetch(`${origin}/crm/api/dashboard/templates`, { method: "POST", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ template: chartDraft }) });
+    const chartCreate = await chartCreateResponse.json();
+    assert.equal(chartCreateResponse.status, 201, JSON.stringify(chartCreate));
+    assert.equal(chartCreate.template.revision, 1);
+    chartDraft.description = "已修改";
+    const chartUpdateResponse = await fetch(`${origin}/crm/api/dashboard/templates/${chartCreate.template.id}`, { method: "PUT", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ template: chartDraft, revision: 1 }) });
+    const chartUpdate = await chartUpdateResponse.json();
+    assert.equal(chartUpdateResponse.status, 200, JSON.stringify(chartUpdate));
+    assert.equal(chartUpdate.template.revision, 2);
+    const chartConflict = await fetch(`${origin}/crm/api/dashboard/templates/${chartCreate.template.id}`, { method: "PUT", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ template: chartDraft, revision: 1 }) });
+    assert.equal(chartConflict.status, 409);
 
     async function upload(name, device) {
       const csv = `业务属性,业务名称,计量规则,月平均计量,设备编号,初始完工日期\n新装,测试业务,新增量,100,${device},2026-01-01\n`;

@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
 import type { EChartsCoreOption } from "echarts/core";
-import { BarChart, PieChart } from "echarts/charts";
+import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import type { RankedItem, Snapshot } from "../lib/data-model";
+import type { AggregatedChartData } from "../lib/chart-aggregation";
+import type { ChartTemplateDraft } from "../lib/chart-template";
 
-echarts.use([BarChart, PieChart, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent, SVGRenderer]);
+echarts.use([BarChart, LineChart, PieChart, ScatterChart, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent, SVGRenderer]);
 
 const CHART_FONT = '"Microsoft YaHei", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif';
 const axisText = { color: "#526176", fontFamily: CHART_FONT, fontSize: 12 };
@@ -32,6 +34,62 @@ function Chart({ option, onSelect, height = 260 }: { option: EChartsCoreOption; 
 
 function EmptyChart() {
   return <div className="chart-empty"><strong>--</strong><span>暂无可绘制数据</span></div>;
+}
+
+function formatValue(value: unknown, unit: string) {
+  if (value === null || value === undefined || value === "") return "--";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "--";
+  if (unit === "元") return `¥ ${number.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+  if (unit === "%") return `${number.toLocaleString("zh-CN", { maximumFractionDigits: 1 })}%`;
+  return `${number.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} ${unit}`;
+}
+
+export function ConfigurableChart({ data, template, onSelect }: { data: AggregatedChartData; template: ChartTemplateDraft; onSelect?: (name: string) => void }) {
+  if (!data.categories.length || !data.series.length || data.series.every((series) => series.values.every((value) => value === null))) return <EmptyChart />;
+  const base: EChartsCoreOption = {
+    animationDuration: 450,
+    color: ["#2764e7", "#2a91a8", "#cb5a69", "#e3a33c", "#7657d5", "#4b7b55", "#8b6a4f"],
+    textStyle: { fontFamily: CHART_FONT, fontSize: 12, color: "#526176" },
+    tooltip: { trigger: template.chartType === "pie" || template.chartType === "donut" ? "item" : "axis", textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, valueFormatter: (value: unknown) => formatValue(value, data.unit) },
+    legend: template.options.showLegend ? { type: "scroll", top: 2, textStyle: axisText } : undefined,
+  };
+  let option: EChartsCoreOption;
+  if (template.chartType === "pie" || template.chartType === "donut") {
+    option = {
+      ...base,
+      tooltip: { trigger: "item", formatter: (params: unknown) => {
+        const item = params as { name?: string; value?: unknown; percent?: number };
+        return `${item.name ?? "--"}<br/>${formatValue(item.value, data.unit)} · ${item.percent ?? 0}%`;
+      } },
+      legend: template.options.showLegend ? { type: "scroll", orient: "vertical", right: 4, top: "middle", textStyle: axisText } : undefined,
+      series: [{ type: "pie", radius: template.chartType === "donut" ? ["42%", "68%"] : [0, "70%"], center: [template.options.showLegend ? "40%" : "50%", "54%"], label: { show: template.options.showLabels, formatter: "{b}: {d}%" }, itemStyle: { borderColor: "#fff", borderWidth: 2 }, data: data.categories.map((name, index) => ({ name, value: data.series[0].values[index] })) }],
+    };
+  } else if (template.chartType === "scatter") {
+    const x = data.series[0];
+    const y = data.series[1];
+    option = {
+      ...base,
+      grid: { left: 62, right: 28, top: 42, bottom: 48 },
+      xAxis: { type: "value", name: x.name, nameLocation: "middle", nameGap: 32, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
+      yAxis: { type: "value", name: y.name, nameLocation: "middle", nameGap: 48, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
+      series: [{ name: `${x.name} / ${y.name}`, type: "scatter", symbolSize: 12, label: { show: template.options.showLabels, formatter: (params: unknown) => (params as { name?: string }).name ?? "" }, data: data.categories.map((name, index) => ({ name, value: [x.values[index], y.values[index]] })) }],
+    };
+  } else {
+    const horizontal = template.options.orientation === "horizontal" && (template.chartType === "bar" || template.chartType === "stackedBar");
+    const categoryAxis = { type: "category" as const, data: data.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: "#dfe5ed" } }, axisLabel: { ...axisText, rotate: horizontal ? 0 : data.categories.length > 10 ? 30 : 0, width: horizontal ? 90 : undefined, overflow: "truncate" as const } };
+    const valueAxis = { type: "value" as const, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText };
+    const isLine = template.chartType === "line" || template.chartType === "area";
+    option = {
+      ...base,
+      grid: { left: horizontal ? 105 : 58, right: 26, top: template.options.showLegend ? 48 : 24, bottom: data.categories.length > 10 && !horizontal ? 66 : 42 },
+      xAxis: horizontal ? valueAxis : categoryAxis,
+      yAxis: horizontal ? categoryAxis : valueAxis,
+      dataZoom: data.categories.length > 14 && !horizontal ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
+      series: data.series.map((series) => isLine ? ({ name: series.name, type: "line", smooth: template.options.smooth, connectNulls: false, areaStyle: template.chartType === "area" ? { opacity: .14 } : undefined, label: { show: template.options.showLabels }, data: series.values }) : ({ name: series.name, type: "bar", stack: template.chartType === "stackedBar" ? "total" : undefined, barMaxWidth: 30, label: { show: template.options.showLabels, position: horizontal ? "right" : "top" }, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] }, data: series.values })),
+    };
+  }
+  return <Chart option={option} onSelect={onSelect} height={template.options.height} />;
 }
 
 export function MonthlyChart({ data }: { data: Snapshot["monthly"] }) {

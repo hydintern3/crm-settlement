@@ -18,7 +18,12 @@ test("keeps local data private and does not fall back to mock records", async ()
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/components/AnalyticsCharts.tsx", root), "utf8"),
   ]);
-  const reportTablesSource = await readFile(new URL("app/components/ReportTables.tsx", root), "utf8");
+  const [reportTablesSource, chartTemplateSource, chartBuilderSource, dashboardStoreSource] = await Promise.all([
+    readFile(new URL("app/components/ReportTables.tsx", root), "utf8"),
+    readFile(new URL("app/lib/chart-template.ts", root), "utf8"),
+    readFile(new URL("app/components/ChartBuilder.tsx", root), "utf8"),
+    readFile(new URL("app/lib/server/dashboard-store.ts", root), "utf8"),
+  ]);
 
   assert.match(gitignore, /public\/data\/local-snapshot\.json/);
   assert.match(registry, /REPORTS/);
@@ -36,6 +41,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /当前只有一个版本/);
   assert.match(pageSource, /多数据源整合/);
   assert.match(pageSource, /api\/data\/compose/);
+  assert.match(pageSource, /api\/dashboard\/templates/);
+  assert.match(pageSource, /自定义分析总览/);
+  assert.match(pageSource, /新建图表/);
   assert.match(pageSource, /分期计算标识/);
   assert.match(pageSource, /用户拆机原因/);
   assert.match(pageSource, /联系人固话（脱敏）/);
@@ -75,6 +83,13 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(styleSource, /table \{ font-size: 12px/);
   assert.match(chartSource, /SVGRenderer/);
   assert.match(chartSource, /renderer: "svg"/);
+  assert.match(chartSource, /ConfigurableChart/);
+  assert.match(chartTemplateSource, /CHART_FIELDS/);
+  assert.match(chartTemplateSource, /DEFAULT_CHART_TEMPLATES/);
+  assert.doesNotMatch(chartTemplateSource, /eval\s*\(/);
+  assert.match(chartBuilderSource, /LIVE PREVIEW/);
+  assert.match(dashboardStoreSource, /revision/);
+  assert.match(dashboardStoreSource, /rename\(temporary/);
   assert.match(sanitizeScript, /local-snapshot\.json/);
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);
