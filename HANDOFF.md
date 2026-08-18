@@ -14,13 +14,14 @@
 ## 当前仓库状态
 
 - 分支：`main`
-- 当前提交：`a1ba6a7f9a1b3904d10f6daf133154f6fa68c27a`
-- 提交说明：`feat: implement dashboard template management with CRUD operations`
-- 当前未提交改动：`AGENTS.md` 已修改，`HANDOFF.md` 为新增文件，均属于本次交接文档建设；提交后应刷新此项。
+- 当前提交：`02022fd`
+- 提交说明：`feat: 添加新的页面配置和样式更新，优化筛选选项显示`
+- 当前未提交改动：上传容量与非 JSON 错误处理修复，以及本交接记录更新；提交后应刷新此项。
 - 远端仓库：`hydintern3/crm-settlement`
 
 ## 已落地能力
 
+- 上传链路允许单次最多 100 MB 原始表格，框架和 Nginx 使用 110 MB 外层限制；413 或非 JSON 响应会显示可理解的中文错误，不再暴露 `Unexpected token`。
 - 筛选选项采用自适应宽度和完整换行显示；供应商、负责人、业务名称、服务编号等长文本不再以省略号隐藏。
 - 管理员登录、服务端数据上传和数据版本管理。
 - 可选择多个 CRM 全量数据版本，按设备编号去重并整合；空设备编号保留并进入质量检查。
@@ -46,45 +47,22 @@
 
 ## 最近验证结果
 
-在提交 `a1ba6a7f9a1b3904d10f6daf133154f6fa68c27a` 上已完成：
+在提交 `02022fd` 加当前未提交的上传修复上已完成：
 
 - `npm run verify`：通过。
 - 自动化测试：14 项通过。
 - 依赖安全检查：无 high 级别漏洞。
-- 浏览器检查：创建、保存、固定、筛选联动、刷新后持久化、模板管理、编辑流程和 390px 宽度响应式布局均通过。
+- 生产构建：通过，发布检查确认构建产物不包含本地快照或业务表格。
+- 上传回归：构造约 1.22 MB 的 multipart 请求后，已越过原 1 MB 框架限制并到达上传接口，返回 `application/json` 业务校验结果。
 - `AnalyticsCharts` 构建产物约 594.7 KB，接近 600 KB 预算；后续增加图表能力时需关注拆包和懒加载。
 
 以上是历史提交的验证结果。任何新代码变更后都必须重新运行相应检查。
 
-当前未提交的筛选按钮显示改动仍需在本轮验证完成后补充实际结果。
-
 ## 当前部署状态
 
+- 用户已确认当前线上平台部署完成。实际发布约 3,000 条业务数据时遇到框架默认 1 MB multipart 限制；修复代码已通过验证但尚需构建并部署新镜像，同时重新安装 Nginx 片段。
 - 云主机网络无法稳定访问 GHCR，当前采用“从 GitHub Actions 下载离线镜像，再通过 SCP 上传云主机”的部署方式。
-- 最近一次已成功校验并加载离线包，Docker 中得到镜像 `ghcr.io/hydintern3/crm-settlement:latest`。
-- Compose 随后尝试启动提交标签 `a1ba6a7f9a1b3904d10f6daf133154f6fa68c27a`，因本地不存在该标签且访问 GHCR 超时而失败。尚未确认服务器已完成最终部署。
-- 根因：CI 离线包当前只保存 `latest` 标签，而服务器 `.env` 或 Compose 解析结果引用完整提交 SHA。
-
-在服务器上可按以下方式补齐标签并强制离线启动：
-
-```bash
-sudo docker tag \
-  ghcr.io/hydintern3/crm-settlement:latest \
-  ghcr.io/hydintern3/crm-settlement:a1ba6a7f9a1b3904d10f6daf133154f6fa68c27a
-
-cd /opt/crm-settlement
-sudo docker compose up -d --no-build --pull never --force-recreate crm-platform
-sudo docker compose ps
-sudo docker compose logs --tail=200 crm-platform
-```
-
-启动后需继续验证：
-
-```bash
-curl -fsS http://127.0.0.1:3100/crm/api/health
-sudo nginx -t
-curl -kfsS https://<服务器IP>/crm/api/health
-```
+- 当前上传修复要求：单次原始表格总大小不超过 100 MB，应用框架与 Nginx 外层限制为 110 MB。部署新镜像后必须把新版 `deploy/nginx/crm-location.conf` 重新安装到 `/etc/nginx/snippets/` 并重载 Nginx。
 
 不得把真实密码或令牌复制到命令历史、交接文件或问题截图中。
 
@@ -98,7 +76,7 @@ curl -kfsS https://<服务器IP>/crm/api/health
 
 ## 待办与风险
 
-1. 在服务器补充 SHA 标签并完成离线启动，确认健康检查、登录、数据版本和图表模板持久化均正常。
+1. 构建并部署包含上传限制修复的新镜像，重新安装 Nginx 片段并验证约 3,000 条业务数据可以发布。
 2. 改进 `.github/workflows/ci.yml`，让离线镜像包同时包含 `latest` 与提交 SHA 标签，避免每次在服务器手工补标签。此项尚未实施。
 3. 确定只有 IP 场景下的 HTTPS 方案并验证浏览器信任链；最终方案尚未确认。
 4. 图表模板目前采用服务器文件持久化，适合单实例部署；若未来扩展为多实例，需要迁移到共享数据库或对象存储，并处理并发写入。

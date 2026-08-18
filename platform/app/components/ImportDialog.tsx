@@ -8,6 +8,26 @@ import { BASE_PATH } from "../lib/deployment";
 type Props = { open: boolean; onClose: () => void; onImported: (snapshot: Snapshot) => void };
 
 const ACCEPT = ".csv,.xls,.xlsx,.xlsm,.xlsb,.ods,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024;
+
+type UploadResult = { snapshot?: Snapshot; version?: { id: string }; error?: string };
+
+async function readUploadResult(response: Response): Promise<UploadResult> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      return await response.json() as UploadResult;
+    } catch {
+      return { error: `服务器响应格式异常（HTTP ${response.status}）` };
+    }
+  }
+  if (response.status === 413) return { error: "上传内容过大：单次发布的表格总大小不能超过 100 MB，请拆分为多个数据版本后再整合" };
+  return { error: `服务器未返回可识别的结果（HTTP ${response.status}）` };
+}
+
+function fileSizeText(bytes: number) {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export function ImportDialog({ open, onClose, onImported }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -37,6 +57,8 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
     try {
       const selectedFiles = [...fileList].filter((file) => /\.(csv|xls|xlsx|xlsm|xlsb|ods)$/i.test(file.name));
       if (new Set(selectedFiles.map((file) => file.name.toLowerCase())).size !== selectedFiles.length) throw new Error("同一次上传不能包含同名文件，请先重命名。 ");
+      const totalFileBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+      if (totalFileBytes > MAX_UPLOAD_FILE_BYTES) throw new Error("单次发布的表格总大小不能超过 100 MB；请拆分上传为多个版本，随后在数据中心去重整合。");
       const next = await inspectWorkbookFiles(selectedFiles);
       setFiles(selectedFiles);
       setSheets(next);
@@ -45,7 +67,7 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
       setBusinessIds(business ? [business.id] : []);
       setProviderId(provider?.id ?? "");
       setStatus("idle");
-      setMessage(`已识别 ${next.length} 个工作表：业务表 ${next.filter((sheet) => sheet.kind === "business").length} 个，服务商表 ${next.filter((sheet) => sheet.kind === "provider").length} 个。`);
+      setMessage(`已读取 ${fileSizeText(totalFileBytes)}，识别 ${next.length} 个工作表：业务表 ${next.filter((sheet) => sheet.kind === "business").length} 个，服务商表 ${next.filter((sheet) => sheet.kind === "provider").length} 个。`);
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "导入失败，请检查文件格式。");
@@ -67,7 +89,7 @@ export function ImportDialog({ open, onClose, onImported }: Props) {
       form.set("providerId", providerId);
       form.set("label", label);
       const response = await fetch(`${BASE_PATH}/api/data/upload`, { method: "POST", body: form });
-      const result = await response.json() as { snapshot?: Snapshot; version?: { id: string }; error?: string };
+      const result = await readUploadResult(response);
       if (!response.ok || !result.snapshot) throw new Error(result.error || "服务器未能发布数据版本");
       onImported(result.snapshot);
       setStatus("idle");

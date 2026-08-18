@@ -18,11 +18,13 @@ test("keeps local data private and does not fall back to mock records", async ()
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/components/AnalyticsCharts.tsx", root), "utf8"),
   ]);
-  const [reportTablesSource, chartTemplateSource, chartBuilderSource, dashboardStoreSource] = await Promise.all([
+  const [reportTablesSource, chartTemplateSource, chartBuilderSource, dashboardStoreSource, nextConfigSource, nginxConfigSource] = await Promise.all([
     readFile(new URL("app/components/ReportTables.tsx", root), "utf8"),
     readFile(new URL("app/lib/chart-template.ts", root), "utf8"),
     readFile(new URL("app/components/ChartBuilder.tsx", root), "utf8"),
     readFile(new URL("app/lib/server/dashboard-store.ts", root), "utf8"),
+    readFile(new URL("next.config.ts", root), "utf8"),
+    readFile(new URL("../deploy/nginx/crm-location.conf", root), "utf8"),
   ]);
 
   assert.match(gitignore, /public\/data\/local-snapshot\.json/);
@@ -57,6 +59,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(importSource, /businessIds/);
   assert.match(importSource, /api\/data\/upload/);
   assert.match(importSource, /发布数据版本/);
+  assert.match(importSource, /response\.status === 413/);
+  assert.match(importSource, /MAX_UPLOAD_FILE_BYTES/);
+  assert.doesNotMatch(importSource, /const result = await response\.json/);
   assert.match(dataModelSource, /初始完工日期/);
   assert.match(dataModelSource, /initialCompletedDate \|\| rawCompletedDate/);
   assert.match(dataModelSource, /buildCompletionCohorts/);
@@ -92,6 +97,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(chartBuilderSource, /LIVE PREVIEW/);
   assert.match(dashboardStoreSource, /revision/);
   assert.match(dashboardStoreSource, /rename\(temporary/);
+  assert.match(nextConfigSource, /bodySizeLimit: "110mb"/);
+  assert.match(nginxConfigSource, /client_max_body_size 110m/);
   assert.match(sanitizeScript, /local-snapshot\.json/);
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);

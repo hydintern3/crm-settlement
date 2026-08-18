@@ -185,6 +185,25 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
+### 上传文件大小配置
+
+平台允许单次发布的原始表格总大小不超过 100 MB。由于浏览器使用
+`multipart/form-data` 上传，框架和 Nginx 均预留到 110 MB。更新部署文件后，
+必须重新安装 Nginx 片段并重载配置：
+
+```bash
+sudo install -m 644 \
+  /opt/crm-settlement/deploy/nginx/crm-location.conf \
+  /etc/nginx/snippets/crm-location.conf
+sudo nginx -t
+sudo systemctl reload nginx
+sudo nginx -T | grep -n -A3 -B2 'client_max_body_size 110m'
+```
+
+如果上传时看到 `Payload Too Large`，先确认运行的是包含上传限制修复的新镜像，
+再确认 `nginx -T` 的实际输出中 `/crm/` 路由包含上述 110 MB 配置。只修改仓库文件
+但没有复制到 `/etc/nginx/snippets/` 并重载 Nginx，不会改变服务器当前配置。
+
 ## 8. 验证两个项目共存
 
 ```bash
