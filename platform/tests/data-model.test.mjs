@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   applyDynamicCalculationRules,
+  buildSettlementReviewSummary,
+  buildSnapshot,
   classifyBusinessEvent,
   localDateISO,
   maskContactLandline,
@@ -42,6 +44,19 @@ test("field mapping preserves source values and audit fields", () => {
   assert.equal(row.removalType, "用户拆机");
   assert.equal(row.userRemovalReason, "经营调整");
   assert.equal(maskContactLandline("1234"), "****");
+});
+
+test("partial CRM rows remain available while settlement review reasons stay explicit", () => {
+  const partial = toBusinessRow({ "设备 编号": "D-PARTIAL", "业务 名称": "字段不完整业务", "负责人\n": "测试负责人" });
+  const snapshot = buildSnapshot([partial], { label: "partial", files: ["partial.xlsx"], currentFile: "partial.xlsx", sheets: [] });
+  const review = buildSettlementReviewSummary(snapshot.rows);
+  assert.equal(snapshot.rows.length, 1);
+  assert.equal(snapshot.summary.total, 1);
+  assert.equal(snapshot.summary.review, 1);
+  assert.equal(snapshot.rows[0].deviceCode, "D-PARTIAL");
+  assert.equal(snapshot.rows[0].businessName, "字段不完整业务");
+  assert.equal(snapshot.rows[0].owner, "测试负责人");
+  assert.deepEqual(review, { total: 1, missingMeteringRule: 1, missingMonthlyMetering: 1, annualPlan: 0 });
 });
 
 test("newer full CRM versions replace duplicate devices while blank keys remain", () => {

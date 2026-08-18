@@ -21,7 +21,7 @@ type BusinessCandidate = {
   rowIndex: number;
 };
 
-const BUSINESS_MARKERS = ["业务属性", "业务名称", "计量规则", "月平均计量"];
+const BUSINESS_MARKERS = ["设备编号", "业务属性", "业务名称", "计量规则", "月平均计量", "完工日期", "负责人", "I服务编号"];
 const PROVIDER_MARKERS = ["服务编号", "服务状态", "服务商"];
 const MAX_FILES = 20;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;

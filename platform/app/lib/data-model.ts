@@ -221,9 +221,17 @@ export function dateValue(value: unknown): string {
   return shortYear ? `20${shortYear[3]}-${shortYear[1].padStart(2, "0")}-${shortYear[2].padStart(2, "0")}` : source.slice(0, 10);
 }
 
+function normalizedHeader(value: string) {
+  return value.replace(/\s+/g, "").trim();
+}
+
 function first(row: RawRow, names: string[]) {
   for (const name of names) {
     if (row[name] !== undefined) return row[name];
+  }
+  const normalizedNames = new Set(names.map(normalizedHeader));
+  for (const [name, value] of Object.entries(row)) {
+    if (normalizedNames.has(normalizedHeader(name))) return value;
   }
   return "";
 }
@@ -298,6 +306,14 @@ export function isInstall(row: BusinessRow) {
 
 export function isActive(row: BusinessRow) {
   return row.activeStatus === "活跃" || row.activeStatus === "正常";
+}
+
+export function buildSettlementReviewSummary(rows: BusinessRow[]) {
+  const missingMeteringRule = rows.filter((row) => !row.meteringRule).length;
+  const missingMonthlyMetering = rows.filter((row) => row.monthlyMetering === null).length;
+  const annualPlan = rows.filter((row) => /年付|两年付/.test(row.businessName)).length;
+  const total = rows.filter((row) => !row.meteringRule || row.monthlyMetering === null || /年付|两年付/.test(row.businessName)).length;
+  return { total, missingMeteringRule, missingMonthlyMetering, annualPlan };
 }
 
 function needsReview(row: BusinessRow) {

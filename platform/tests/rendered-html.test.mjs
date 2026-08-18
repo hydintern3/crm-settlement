@@ -49,6 +49,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /分期计算标识/);
   assert.match(pageSource, /用户拆机原因/);
   assert.match(pageSource, /联系人固话（脱敏）/);
+  assert.match(pageSource, /结算待复核/);
+  assert.match(pageSource, /均可用于版本管理、查询和已有字段筛选/);
   assert.match(pageSource, /activeNav !== "数据中心" && filterBar/);
   assert.match(pageSource, /activeNav === "数据中心" \? content/);
   assert.match(pageSource, /EMPTY_SNAPSHOT/);

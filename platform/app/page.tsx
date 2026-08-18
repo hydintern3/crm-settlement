@@ -3,7 +3,7 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
 import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, ProfitTargetTables, ProviderReportTables, SalesReportTables, SettlementReportTables } from "./components/ReportTables";
-import { applyDynamicCalculationRules, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
+import { applyDynamicCalculationRules, buildSettlementReviewSummary, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
 import { BASE_PATH } from "./lib/deployment";
 import type { DataVersionManifest } from "./lib/data-version";
 import { buildChartData } from "./lib/chart-aggregation";
@@ -84,6 +84,7 @@ function VersionPanel({ versions, activeId, workingId, onActivate, onCompose }: 
 
 function DataCenterView({ snapshot, admin, versions, activeId, workingId, notice, config, rows, onUpload, onRefresh, onActivate, onCompose, onLogout, onConfigChange }: { snapshot: Snapshot; admin: string; versions: DataVersionManifest[]; activeId: string | null; workingId: string; notice: CenterNotice; config: CalculationRuleConfig; rows: BusinessRow[]; onUpload: () => void; onRefresh: () => void; onActivate: (id: string) => void; onCompose: (ids: string[], label: string) => Promise<boolean>; onLogout: () => void; onConfigChange: (next: CalculationRuleConfig) => void }) {
   const activeVersion = versions.find((version) => version.id === activeId) ?? null;
+  const settlementReview = buildSettlementReviewSummary(rows);
   return <section className="data-center-flow">
     <Panel label="CURRENT DATA" title="当前数据版本" className="data-center-current" aside={<span className={`status-chip ${activeVersion ? "ready" : "pending"}`}>{activeVersion ? "已激活" : "等待发布"}</span>}>
       {notice && <div className={`center-notice ${notice.tone}`}>{notice.text}</div>}
@@ -92,7 +93,7 @@ function DataCenterView({ snapshot, admin, versions, activeId, workingId, notice
     <VersionPanel versions={versions} activeId={activeId} workingId={workingId} onActivate={onActivate} onCompose={onCompose} />
     <section className="module-grid data-center-secondary">
       <Panel label="SOURCE" title="当前数据来源"><div className="compact-source"><strong>{snapshot.source.label}</strong><span>{snapshot.source.currentFile}</span><small>{snapshot.source.files.length ? snapshot.source.files.join("、") : "--"}</small></div></Panel>
-      <Panel label="QUALITY SUMMARY" title="数据概况"><div className="quality-list compact"><span><strong>{numberText(snapshot.summary.total)}</strong>业务记录</span><span><strong>{snapshot.source.deduplication?.removedRows ?? "--"}</strong>排除重复</span><span><strong>{snapshot.source.deduplication?.blankKeyRows ?? "--"}</strong>设备号为空</span><span><strong>{numberText(snapshot.summary.review)}</strong>待复核</span></div></Panel>
+      <Panel label="QUALITY SUMMARY" title="数据概况"><div className="quality-list compact"><span><strong>{numberText(snapshot.summary.total)}</strong>业务记录</span><span><strong>{snapshot.source.deduplication?.removedRows ?? "--"}</strong>排除重复</span><span><strong>{snapshot.source.deduplication?.blankKeyRows ?? "--"}</strong>设备号为空</span><span><strong>{numberText(settlementReview.total)}</strong>结算待复核</span></div><p className="panel-note">全部 {rows.length.toLocaleString("zh-CN")} 条记录均可用于版本管理、查询和已有字段筛选。结算待复核仅表示：缺计量规则 {settlementReview.missingMeteringRule.toLocaleString("zh-CN")} 条、缺月平均计量 {settlementReview.missingMonthlyMetering.toLocaleString("zh-CN")} 条、年付/两年付 {settlementReview.annualPlan.toLocaleString("zh-CN")} 条；原因可能重叠。</p></Panel>
     </section>
     <div className="data-center-full"><CalculationRulePanel config={config} rows={rows} onChange={onConfigChange} /></div>
     {snapshot.source.sheets?.length ? <Panel label="SHEET AUDIT" title="工作表与去重审计" className="wide-panel"><div className="sheet-summary">{snapshot.source.sheets.map((sheet) => <span key={`${sheet.fileName}-${sheet.sheetName}`} className={`sheet-chip ${sheet.kind}`}>{sheet.fileName} / {sheet.sheetName} · {sheet.rowCount} 行</span>)}</div>{snapshot.source.deduplication && <p className="panel-note">按设备编号去重：输入 {snapshot.source.deduplication.inputRows} 条，保留 {snapshot.source.deduplication.outputRows} 条，排除 {snapshot.source.deduplication.removedRows} 条；空设备编号 {snapshot.source.deduplication.blankKeyRows} 条。</p>}</Panel> : null}
@@ -186,7 +187,7 @@ function Metrics({ rows }: { rows: BusinessRow[] }) {
     ["月平均计量", moneyWan(summary.monthlyMetering), "万元", "仅汇总有效金额", "amber"],
     ["新装", numberText(summary.installs), "条", "当前筛选范围", "blue"],
     ["拆机", numberText(summary.removals), "条", "当前筛选范围", "rose"],
-    ["待人工复核", numberText(summary.review), "条", "缺规则、缺金额或特殊场景", "violet"],
+    ["结算待复核", numberText(summary.review), "条", "不影响版本管理、查询和筛选", "violet"],
   ];
   return <section className="metric-grid">{metrics.map(([label, value, unit, note, tone]) => <article className={`metric-card metric-${tone}`} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div><small>{note}</small></article>)}</section>;
 }
@@ -563,7 +564,7 @@ export default function Home() {
 
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">衡</div><div><strong>衡析</strong><span>CRM 业务分析平台</span></div></div><nav>{NAV_ITEMS.map(([name, description], index) => <button key={name} className={activeNav === name ? "active" : ""} onClick={() => navigate(name)}><span className="nav-icon">{String(index + 1).padStart(2, "0")}</span><span><strong>{name}</strong><small>{description}</small></span></button>)}</nav><div className="sidebar-foot"><i className={snapshot.mode === "empty" ? "empty" : ""} /><div><strong>{snapshot.mode === "empty" ? "等待导入数据" : "数据已连接"}</strong><small>{snapshot.source.currentFile}</small></div></div></aside>
     <main className="main"><header className="topbar"><div><p className="eyebrow">BUSINESS INTELLIGENCE · 2026</p><h1>{activeNav}</h1></div><div className="top-actions"><span className="sync-state">数据更新：{updated}</span><button className="ghost-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出当前数据</button><button className="primary-button" onClick={() => setShowImport(true)}>＋ 导入数据</button></div></header>{activeNav !== "数据中心" && filterBar}{activeNav !== "数据中心" && snapshot.source.deduplication && <div className="dedup-banner"><div><strong>已按设备编号去重</strong><span>输入 {snapshot.source.deduplication.inputRows} 条，保留 {snapshot.source.deduplication.outputRows} 条，排除 {snapshot.source.deduplication.removedRows} 条重复记录。</span></div><small>{snapshot.source.deduplication.strategy}</small></div>}{activeNav === "数据中心" ? content : snapshot.mode === "empty" ? <AnalyticsPlaceholder onImport={() => setShowImport(true)} /> : content}<footer><span>缺失数据统一显示 -- · 不推断脱敏或已清空字段 · 结算结果仅供内部工作分流</span><span>BH 逻辑只读取结果，不回写原始公式</span></footer></main>
-    {showImport ? <Suspense fallback={null}><LazyImportDialog open onClose={() => setShowImport(false)} onImported={(data) => { setSnapshot(data); setFilters(EMPTY_FILTERS); setCenterNotice({ tone: "success", text: "新数据版本已发布并自动激活，旧版本仍保留在历史列表中。" }); void refreshServerData().catch((error) => setCenterNotice({ tone: "error", text: error instanceof Error ? error.message : "版本列表刷新失败" })); }} /></Suspense> : null}
+    {showImport ? <Suspense fallback={null}><LazyImportDialog open onClose={() => setShowImport(false)} onImported={(data) => { setSnapshot(data); setFilters(EMPTY_FILTERS); setCenterNotice({ tone: "success", text: `${data.rows.length.toLocaleString("zh-CN")} 条业务记录已发布并可用于版本管理、查询和已有字段筛选；结算待复核标记不会排除记录。` }); void refreshServerData().catch((error) => setCenterNotice({ tone: "error", text: error instanceof Error ? error.message : "版本列表刷新失败" })); }} /></Suspense> : null}
     {builderTemplate !== undefined ? <Suspense fallback={null}><LazyChartBuilder rows={filteredRows} template={builderTemplate} saving={chartSaving} onClose={() => setBuilderTemplate(undefined)} onSave={saveChartTemplate} /></Suspense> : null}
     {chartDataTemplate ? <ChartDataDialog template={chartDataTemplate} rows={filteredRows} onClose={() => setChartDataTemplate(null)} /> : null}
   </div>;
