@@ -55,12 +55,12 @@ function LoginScreen({ onLogin }: { onLogin: (username: string) => void }) {
 
 type CenterNotice = { tone: "success" | "error"; text: string } | null;
 
-function VersionPanel({ versions, activeId, workingId, onActivate, onCompose }: { versions: DataVersionManifest[]; activeId: string | null; workingId: string; onActivate: (id: string) => void; onCompose: (ids: string[], label: string) => Promise<boolean> }) {
+function VersionPanel({ versions, activeId, workingId, onActivate, onDelete, onCompose }: { versions: DataVersionManifest[]; activeId: string | null; workingId: string; onActivate: (id: string) => void; onDelete: (id: string) => void; onCompose: (ids: string[], label: string) => Promise<boolean> }) {
   const [composeMode, setComposeMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [composeLabel, setComposeLabel] = useState("");
   const ordered = [...versions].sort((left, right) => left.id === activeId ? -1 : right.id === activeId ? 1 : right.createdAt.localeCompare(left.createdAt));
-  const selectableIds = ordered.filter((version) => version.kind !== "composed").map((version) => version.id);
+  const selectableIds = ordered.filter((version) => version.kind !== "composed" && version.quality?.status !== "unusable").map((version) => version.id);
   async function submitCompose() {
     if (await onCompose(selectedIds, composeLabel)) {
       setComposeMode(false);
@@ -74,24 +74,31 @@ function VersionPanel({ versions, activeId, workingId, onActivate, onCompose }: 
     {composeMode && <div className="compose-box"><div><strong>选择需要整合的原始数据源</strong><span>已选 {selectedIds.length} 个版本，合计 {ordered.filter((version) => selectedIds.includes(version.id)).reduce((sum, version) => sum + version.rowCount, 0).toLocaleString("zh-CN")} 行</span></div><label><span>整合版本名称</span><input value={composeLabel} maxLength={120} onChange={(event) => setComposeLabel(event.target.value)} placeholder="例如：2026年8月 CRM 全量整合版" /></label><div className="compose-actions"><small>同一设备编号由较新版本的非空字段覆盖；较新空值保留已有值，空设备编号全部保留。</small><button className="primary-button" disabled={selectedIds.length < 2 || Boolean(workingId)} onClick={() => void submitCompose()}>{workingId === "compose" ? "整合中…" : "发布整合版本"}</button></div></div>}
     <div className="version-list">{ordered.length ? ordered.map((version) => {
       const isComposed = version.kind === "composed";
+      const isUnusable = version.quality?.status === "unusable";
+      const dependent = ordered.find((candidate) => candidate.sourceVersionIds?.includes(version.id));
+      const selectionDisabled = isComposed || isUnusable;
+      const selectionTitle = isComposed ? "派生版本不可再次作为原始数据源" : isUnusable ? "该版本存在大量未映射记录，请重新上传原始业务明细表" : "选择此数据源";
+      const deleteDisabled = version.id === activeId || Boolean(dependent);
+      const deleteTitle = version.id === activeId ? "当前正在使用的数据版本不能删除" : dependent ? `仍被整合版本“${dependent.label}”引用，不能删除` : "删除此历史版本";
       return <article key={version.id} className={`version-item ${version.id === activeId ? "active" : ""}`}>
-        {composeMode && <label className={`version-select ${isComposed ? "disabled" : ""}`} title={isComposed ? "派生版本不可再次作为原始数据源" : "选择此数据源"}><input type="checkbox" disabled={isComposed || Boolean(workingId)} checked={selectedIds.includes(version.id)} onChange={() => setSelectedIds((value) => value.includes(version.id) ? value.filter((id) => id !== version.id) : [...value, version.id])} /><span>{isComposed ? "派生" : "选择"}</span></label>}
-        <div className="version-copy"><div className="version-title-row"><strong>{version.label}</strong>{version.id === activeId && <span className="status-chip ready">当前使用</span>}{isComposed && <span className="status-chip partial">整合版本</span>}</div><code>{version.id}</code><small>{new Date(version.createdAt).toLocaleString("zh-CN", { hour12: false })} · 上传者 {version.createdBy}</small><small>{version.rowCount.toLocaleString("zh-CN")} 条记录 · {isComposed ? `${version.sourceVersionIds?.length ?? 0} 个父版本` : `${version.files.length} 个源文件`}</small></div>
-        {version.id === activeId ? <span className="version-current-note">全站正在使用</span> : <button className="ghost-button" disabled={Boolean(workingId)} onClick={() => onActivate(version.id)}>{workingId === version.id ? "切换中…" : "切换到此版本"}</button>}
+        {composeMode && <label className={`version-select ${selectionDisabled ? "disabled" : ""}`} title={selectionTitle}><input type="checkbox" disabled={selectionDisabled || Boolean(workingId)} checked={selectedIds.includes(version.id)} onChange={() => setSelectedIds((value) => value.includes(version.id) ? value.filter((id) => id !== version.id) : [...value, version.id])} /><span>{isComposed ? "派生" : isUnusable ? "不可用" : "选择"}</span></label>}
+        <div className="version-copy"><div className="version-title-row"><strong>{version.label}</strong>{version.id === activeId && <span className="status-chip ready">当前使用</span>}{isComposed && <span className="status-chip partial">整合版本</span>}{isUnusable && <span className="status-chip error">字段未映射</span>}{version.quality?.status === "warning" && <span className="status-chip pending">部分未映射</span>}</div><code>{version.id}</code><small>{new Date(version.createdAt).toLocaleString("zh-CN", { hour12: false })} · 上传者 {version.createdBy}</small><small>{version.rowCount.toLocaleString("zh-CN")} 条记录 · {isComposed ? `${version.sourceVersionIds?.length ?? 0} 个父版本` : `${version.files.length} 个源文件`}{version.quality?.unmappedRows ? ` · ${version.quality.unmappedRows.toLocaleString("zh-CN")} 条字段未映射` : ""}</small></div>
+        <div className="version-actions">{version.id === activeId ? <span className="version-current-note">全站正在使用</span> : <button className="ghost-button" disabled={Boolean(workingId) || isUnusable} title={isUnusable ? selectionTitle : undefined} onClick={() => onActivate(version.id)}>{workingId === version.id ? "切换中…" : "切换到此版本"}</button>}<button className="clear-button" disabled={Boolean(workingId) || deleteDisabled} title={deleteTitle} onClick={() => onDelete(version.id)}>{workingId === `delete:${version.id}` ? "删除中…" : "删除"}</button></div>
       </article>;
     }) : <div className="availability-note"><strong>尚无服务器版本</strong><span>点击上方“上传新版本”发布第一份数据。</span></div>}</div>
   </Panel>;
 }
 
-function DataCenterView({ snapshot, admin, versions, activeId, workingId, notice, config, rows, onUpload, onRefresh, onActivate, onCompose, onLogout, onConfigChange }: { snapshot: Snapshot; admin: string; versions: DataVersionManifest[]; activeId: string | null; workingId: string; notice: CenterNotice; config: CalculationRuleConfig; rows: BusinessRow[]; onUpload: () => void; onRefresh: () => void; onActivate: (id: string) => void; onCompose: (ids: string[], label: string) => Promise<boolean>; onLogout: () => void; onConfigChange: (next: CalculationRuleConfig) => void }) {
+function DataCenterView({ snapshot, admin, versions, activeId, workingId, notice, config, rows, onUpload, onRefresh, onActivate, onDelete, onCompose, onLogout, onConfigChange }: { snapshot: Snapshot; admin: string; versions: DataVersionManifest[]; activeId: string | null; workingId: string; notice: CenterNotice; config: CalculationRuleConfig; rows: BusinessRow[]; onUpload: () => void; onRefresh: () => void; onActivate: (id: string) => void; onDelete: (id: string) => void; onCompose: (ids: string[], label: string) => Promise<boolean>; onLogout: () => void; onConfigChange: (next: CalculationRuleConfig) => void }) {
   const activeVersion = versions.find((version) => version.id === activeId) ?? null;
   const settlementReview = buildSettlementReviewSummary(rows);
   return <section className="data-center-flow">
     <Panel label="CURRENT DATA" title="当前数据版本" className="data-center-current" aside={<span className={`status-chip ${activeVersion ? "ready" : "pending"}`}>{activeVersion ? "已激活" : "等待发布"}</span>}>
       {notice && <div className={`center-notice ${notice.tone}`}>{notice.text}</div>}
+      {activeVersion?.quality?.status === "unusable" && <div className="center-notice error">当前版本有 {activeVersion.quality.unmappedRows.toLocaleString("zh-CN")} 条记录未映射到业务字段。这是旧解析结果，不能通过整合自动修复；请重新上传原始文件并选择业务明细工作表。</div>}
       {activeVersion ? <><div className="current-version-head"><div><strong>{activeVersion.label}</strong><code>{activeVersion.id}</code></div><div className="current-version-actions"><button className="primary-button" onClick={onUpload}>＋ 上传新版本</button><button className="ghost-button" onClick={onRefresh}>刷新版本</button><button className="text-button" onClick={onLogout}>退出登录</button></div></div><div className="current-version-stats"><span><small>发布时间</small><strong>{new Date(activeVersion.createdAt).toLocaleString("zh-CN", { hour12: false })}</strong></span><span><small>上传者</small><strong>{activeVersion.createdBy}</strong></span><span><small>业务记录</small><strong>{activeVersion.rowCount.toLocaleString("zh-CN")} 条</strong></span><span><small>数据来源</small><strong>{activeVersion.kind === "composed" ? `${activeVersion.sourceVersionIds?.length ?? 0} 个版本` : `${activeVersion.files.length} 个文件`}</strong></span></div></> : <div className="current-version-empty"><div><strong>尚未发布服务器数据</strong><span>上传表格并确认工作表后，系统会生成第一个不可变版本并自动激活。</span></div><div className="current-version-actions"><button className="primary-button" onClick={onUpload}>＋ 上传第一个版本</button><button className="text-button" onClick={onLogout}>退出登录（{admin}）</button></div></div>}
     </Panel>
-    <VersionPanel versions={versions} activeId={activeId} workingId={workingId} onActivate={onActivate} onCompose={onCompose} />
+    <VersionPanel versions={versions} activeId={activeId} workingId={workingId} onActivate={onActivate} onDelete={onDelete} onCompose={onCompose} />
     <section className="module-grid data-center-secondary">
       <Panel label="SOURCE" title="当前数据来源"><div className="compact-source"><strong>{snapshot.source.label}</strong><span>{snapshot.source.currentFile}</span><small>{snapshot.source.files.length ? snapshot.source.files.join("、") : "--"}</small></div></Panel>
       <Panel label="QUALITY SUMMARY" title="数据概况"><div className="quality-list compact"><span><strong>{numberText(snapshot.summary.total)}</strong>业务记录</span><span><strong>{snapshot.source.deduplication?.removedRows ?? "--"}</strong>排除重复</span><span><strong>{snapshot.source.deduplication?.blankKeyRows ?? "--"}</strong>设备号为空</span><span><strong>{numberText(settlementReview.total)}</strong>结算待复核</span></div><p className="panel-note">全部 {rows.length.toLocaleString("zh-CN")} 条记录均可用于版本管理、查询和已有字段筛选。结算待复核仅表示：缺计量规则 {settlementReview.missingMeteringRule.toLocaleString("zh-CN")} 条、缺月平均计量 {settlementReview.missingMonthlyMetering.toLocaleString("zh-CN")} 条、年付/两年付 {settlementReview.annualPlan.toLocaleString("zh-CN")} 条；原因可能重叠。</p></Panel>
@@ -367,6 +374,24 @@ export default function Home() {
     }
   }
 
+  async function deleteDataVersion(id: string) {
+    const target = versions.find((version) => version.id === id);
+    if (!target || !window.confirm(`确认永久删除历史数据版本？\n\n版本：${target.label}\n记录：${target.rowCount.toLocaleString("zh-CN")} 条\n\n此操作会删除服务器保存的原始文件和快照，无法恢复；不会影响其他版本。`)) return;
+    setVersionWorking(`delete:${id}`);
+    setCenterNotice(null);
+    try {
+      const response = await fetch(`${BASE_PATH}/api/data/versions/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const result = await response.json() as { error?: string; deleted?: { label?: string } };
+      if (!response.ok) throw new Error(result.error || "版本删除失败");
+      await refreshServerData();
+      setCenterNotice({ tone: "success", text: `已删除历史版本“${result.deleted?.label ?? target.label}”。` });
+    } catch (error) {
+      setCenterNotice({ tone: "error", text: error instanceof Error ? error.message : "版本删除失败" });
+    } finally {
+      setVersionWorking("");
+    }
+  }
+
   async function composeDataVersions(ids: string[], label: string) {
     const selected = versions.filter((version) => ids.includes(version.id)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     if (selected.length < 2) return false;
@@ -566,7 +591,7 @@ export default function Home() {
   else if (activeNav === "服务商分析") content = <><section className="module-grid"><Panel label="SERVICE PROVIDER RANKING" title="服务商进单排名（I 服务编号）"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "service")} /></Panel><Panel label="SERVICE PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><ProviderReportTables rows={filteredRows} /></>;
   else if (activeNav === "毛利与目标") content = <ProfitTargetTables />;
   else if (activeNav === "结算中心") content = <><Metrics rows={filteredRows} /><SettlementReportTables /></>;
-  else content = <DataCenterView snapshot={snapshot} admin={admin} versions={versions} activeId={activeVersionId} workingId={versionWorking} notice={centerNotice} config={calculationRules} rows={calculatedRows} onUpload={() => setShowImport(true)} onRefresh={() => void refreshDataCenter()} onActivate={(id) => void activateDataVersion(id)} onCompose={composeDataVersions} onLogout={() => void logout()} onConfigChange={setCalculationRules} />;
+  else content = <DataCenterView snapshot={snapshot} admin={admin} versions={versions} activeId={activeVersionId} workingId={versionWorking} notice={centerNotice} config={calculationRules} rows={calculatedRows} onUpload={() => setShowImport(true)} onRefresh={() => void refreshDataCenter()} onActivate={(id) => void activateDataVersion(id)} onDelete={(id) => void deleteDataVersion(id)} onCompose={composeDataVersions} onLogout={() => void logout()} onConfigChange={setCalculationRules} />;
 
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">衡</div><div><strong>衡析</strong><span>CRM 业务分析平台</span></div></div><nav>{NAV_ITEMS.map(([name, description], index) => <button key={name} className={activeNav === name ? "active" : ""} onClick={() => navigate(name)}><span className="nav-icon">{String(index + 1).padStart(2, "0")}</span><span><strong>{name}</strong><small>{description}</small></span></button>)}</nav><div className="sidebar-foot"><i className={snapshot.mode === "empty" ? "empty" : ""} /><div><strong>{snapshot.mode === "empty" ? "等待导入数据" : "数据已连接"}</strong><small>{snapshot.source.currentFile}</small></div></div></aside>
     <main className="main"><header className="topbar"><div><p className="eyebrow">BUSINESS INTELLIGENCE · 2026</p><h1>{activeNav}</h1></div><div className="top-actions"><span className="sync-state">数据更新：{updated}</span><button className="ghost-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出当前数据</button><button className="primary-button" onClick={() => setShowImport(true)}>＋ 导入数据</button></div></header>{activeNav !== "数据中心" && filterBar}{activeNav !== "数据中心" && snapshot.source.deduplication && <div className="dedup-banner"><div><strong>已按设备编号去重</strong><span>输入 {snapshot.source.deduplication.inputRows} 条，保留 {snapshot.source.deduplication.outputRows} 条，排除 {snapshot.source.deduplication.removedRows} 条重复记录。</span></div><small>{snapshot.source.deduplication.strategy}</small></div>}{activeNav === "数据中心" ? content : snapshot.mode === "empty" ? <AnalyticsPlaceholder onImport={() => setShowImport(true)} /> : content}<footer><span>缺失数据统一显示 -- · 不推断脱敏或已清空字段 · 结算结果仅供内部工作分流</span><span>BH 逻辑只读取结果，不回写原始公式</span></footer></main>

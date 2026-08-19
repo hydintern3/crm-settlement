@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { createPasswordHash, createSession, readSession, verifyPassword } from "../app/lib/server/auth.ts";
-import { activateVersion, composeVersions, getCurrentData, listVersions, publishVersion } from "../app/lib/server/data-store.ts";
+import { activateVersion, composeVersions, deleteVersion, getCurrentData, listVersions, publishVersion } from "../app/lib/server/data-store.ts";
 import { buildSnapshot, toBusinessRow } from "../app/lib/data-model.ts";
 import { createChartTemplate, listChartTemplates, reorderChartTemplates, updateChartTemplate } from "../app/lib/server/dashboard-store.ts";
 import { defaultChartDraft, templateDraft } from "../app/lib/chart-template.ts";
@@ -43,6 +43,42 @@ test("immutable versions publish, switch and persist through the active pointer"
     const current = await getCurrentData();
     assert.equal(current?.version.id, first.id);
     assert.equal(current?.snapshot.rows[0].deviceCode, "D-1");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("publishing blocks snapshots whose business fields were not mapped", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "crm-unmapped-test-"));
+  process.env.CRM_DATA_DIR = directory;
+  try {
+    const snapshot = buildSnapshot(Array.from({ length: 3 }, () => toBusinessRow({})), { label: "旧空快照", files: ["broken.xls"], currentFile: "broken.xls / Worksheet" });
+    await assert.rejects(
+      () => publishVersion({ files: [new File(["broken"], "broken.xls")], snapshot, businessIds: ["broken.xls::Worksheet"], actor: "finance-admin" }),
+      /3 条记录未映射到业务字段/,
+    );
+    assert.equal((await listVersions()).versions.length, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("only unreferenced inactive historical versions can be deleted", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "crm-delete-version-test-"));
+  process.env.CRM_DATA_DIR = directory;
+  try {
+    const makeSnapshot = (deviceCode) => buildSnapshot([toBusinessRow({ 业务属性: "新装", 设备编号: deviceCode })], { label: deviceCode, files: [], currentFile: deviceCode });
+    const first = await publishVersion({ files: [new File(["first"], "first.csv")], snapshot: makeSnapshot("D-1"), businessIds: ["first"], actor: "finance-admin" });
+    const second = await publishVersion({ files: [new File(["second"], "second.csv")], snapshot: makeSnapshot("D-2"), businessIds: ["second"], actor: "finance-admin" });
+    await assert.rejects(() => deleteVersion(second.id, "finance-admin"), /当前正在使用/);
+    const composed = await composeVersions({ sourceVersionIds: [first.id, second.id], actor: "finance-admin" });
+    await assert.rejects(() => deleteVersion(first.id, "finance-admin"), /仍被整合版本/);
+    await activateVersion(second.id, "finance-admin", "测试删除保护");
+    await deleteVersion(composed.version.id, "finance-admin");
+    const deleted = await deleteVersion(first.id, "finance-admin");
+    assert.deepEqual(deleted, { id: first.id, label: first.label });
+    const remaining = await listVersions();
+    assert.deepEqual(remaining.versions.map((version) => version.id), [second.id]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

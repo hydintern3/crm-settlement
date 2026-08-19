@@ -266,6 +266,7 @@ tbody tr:hover { background: #f9fbfe; }
 .report-copy small { margin-top: 5px; color: #8995a5; font-size: 8px; line-height: 1.45; }
 .status-chip.ready { color:#23745f;background:#e6f3ee; } .status-chip.pending { color:#98671f;background:#f8f0dc; } .status-chip.planned { color:#6c7481;background:#edf0f4; }
 .status-chip.partial { color:#245d9a;background:#e9f1fb; }
+.status-chip.error { color:#a33f50;background:#fff0f2; }
 .report-module-grid { margin-top: 13px; }
 .report-table-panel .panel-header { gap: 18px; align-items: flex-start; }
 .report-table-panel .panel-header > div { min-width: 0; }
@@ -476,6 +477,8 @@ footer { font-size: 11px; }
 .version-item strong { font-size: 13px; }
 .version-item span, .version-item small { overflow-wrap: anywhere; color: var(--muted); font-size: 11px; }
 .version-item .status-chip { color: #23745f; }
+.version-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.version-actions .clear-button { margin-left: 0; }
 .version-current-note { flex: 0 0 auto; color: #23745f !important; font-weight: 600; }
 .version-select { flex: 0 0 auto; display: grid; place-items: center; gap: 3px; color: #526b8c; font-size: 10px; cursor: pointer; }
 .version-select input { width: 17px; height: 17px; accent-color: var(--navy); }

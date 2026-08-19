@@ -52,6 +52,10 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /联系人固话（脱敏）/);
   assert.match(pageSource, /结算待复核/);
   assert.match(pageSource, /均可用于版本管理、查询和已有字段筛选/);
+  assert.match(pageSource, /字段未映射/);
+  assert.match(pageSource, /不能通过整合自动修复/);
+  assert.match(pageSource, /确认永久删除历史数据版本/);
+  assert.match(pageSource, /method: "DELETE"/);
   assert.match(pageSource, /activeNav !== "数据中心" && filterBar/);
   assert.match(pageSource, /activeNav === "数据中心" \? content/);
   assert.match(pageSource, /EMPTY_SNAPSHOT/);

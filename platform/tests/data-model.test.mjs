@@ -11,6 +11,7 @@ import {
   toBusinessRow,
 } from "../app/lib/data-model.ts";
 import { mergeVersionSnapshots } from "../app/lib/workbook-import.ts";
+import { assessDataMappingQuality } from "../app/lib/data-version.ts";
 
 const rules = (baseDate) => ({
   enabled: true,
@@ -57,6 +58,13 @@ test("partial CRM rows remain available while settlement review reasons stay exp
   assert.equal(snapshot.rows[0].businessName, "字段不完整业务");
   assert.equal(snapshot.rows[0].owner, "测试负责人");
   assert.deepEqual(review, { total: 1, missingMeteringRule: 1, missingMonthlyMetering: 1, annualPlan: 0 });
+});
+
+test("mapping quality separates incomplete business rows from legacy empty snapshots", () => {
+  const incomplete = buildSnapshot([toBusinessRow({ 设备编号: "D-PARTIAL" })], { label: "partial", files: [], currentFile: "partial" });
+  const legacyEmpty = buildSnapshot(Array.from({ length: 3 }, () => toBusinessRow({})), { label: "legacy", files: [], currentFile: "legacy" });
+  assert.deepEqual(assessDataMappingQuality(incomplete), { status: "ready", mappedRows: 1, unmappedRows: 0 });
+  assert.deepEqual(assessDataMappingQuality(legacyEmpty), { status: "unusable", mappedRows: 0, unmappedRows: 3 });
 });
 
 test("newer CRM versions override non-empty fields without erasing existing values", () => {
