@@ -55,9 +55,9 @@ export type ChartFieldDefinition = {
 };
 
 export const CHART_FIELDS: readonly ChartFieldDefinition[] = [
-  { field: "completedDate", label: "有效完工日期", type: "date", filterKey: "completedDate" },
-  { field: "businessEvent", label: "业务判定", type: "category", filterKey: "types" },
-  { field: "businessType", label: "源业务属性", type: "category" },
+  { field: "completedDate", label: "统计完工日期（平台）", type: "date", filterKey: "completedDate" },
+  { field: "businessEvent", label: "业务属性判断（平台）", type: "category", filterKey: "types" },
+  { field: "businessType", label: "业务属性（CRM）", type: "category" },
   { field: "businessName", label: "业务名称", type: "category", filterKey: "businessNames" },
   { field: "owner", label: "负责人", type: "category", filterKey: "owners" },
   { field: "provider", label: "供应商", type: "category", filterKey: "providers" },
@@ -66,7 +66,7 @@ export const CHART_FIELDS: readonly ChartFieldDefinition[] = [
   { field: "serviceCodeII", label: "II 服务编号", type: "category", filterKey: "servicesII" },
   { field: "serviceNameII", label: "II 服务", type: "category", filterKey: "servicesII" },
   { field: "activeStatus", label: "活跃状态", type: "category", filterKey: "statuses" },
-  { field: "meteringRule", label: "计量规则", type: "category", filterKey: "rules" },
+  { field: "meteringRule", label: "计量规则（按当前日期计算）", type: "category", filterKey: "rules" },
   { field: "paymentCycle", label: "付款周期", type: "category", filterKey: "paymentCycles" },
   { field: "providerCategory", label: "服务分类", type: "category", filterKey: "providerCategories" },
   { field: "calculationStatus", label: "计算状态", type: "category", filterKey: "calculationStatuses" },

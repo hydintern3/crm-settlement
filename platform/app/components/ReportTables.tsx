@@ -132,7 +132,7 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
         { key: "quarterRatioTarget", label: "季度拆装比目标", numeric: true }, { key: "quarterRatio", label: "季度拆装比", numeric: true }, { key: "annualRatio", label: "全年拆装比", numeric: true },
       ]} rows={monthly} summary={monthlySummary} />
     </ReportPanel>
-    <ReportPanel wide label="COMPLETION COHORT" title="完工批次留存分析" description="按有效完工月份形成批次；有效完工日期优先取初始完工日期，缺失时使用完工日期兜底。">
+    <ReportPanel wide label="COMPLETION COHORT" title="完工批次留存分析" description="按统计完工月份形成批次；统计完工日期优先取初始完工日期，缺失时使用完工日期兜底。">
       <ReportTable columns={[
         { key: "month", label: "有效完工月份" }, { key: "lines", label: "完工线数", numeric: true }, { key: "activeLines", label: "当前活跃线数", numeric: true },
         { key: "removalLines", label: "拆机线数", numeric: true }, { key: "activeRate", label: "当前活跃率", numeric: true },
@@ -167,7 +167,7 @@ export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
     <ReportPanel label="MARKETING COST" title="营销增值费用分析" status="partial" description="金额取增值或营销字段；无有效金额时显示 --。">
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "金额", numeric: true }]} rows={marketing} summary={marketingSummary} />
     </ReportPanel>
-    <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新装、拆机、变更优先按源业务属性识别；属性为空或无法识别时，当前计量规则为新增量可兜底判为新装。拆装比为拆机线数 / 新装线数。">
+    <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新装、拆机、变更优先按业务属性（CRM）识别；属性为空或无法识别时，当前计量规则为新增量可兜底判为新装。拆装比为拆机线数 / 新装线数。">
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "installs", label: "新增数", numeric: true }, { key: "installAmount", label: "新增业务量", numeric: true }, { key: "removals", label: "拆机数", numeric: true }, { key: "removalAmount", label: "拆机业务量", numeric: true }, { key: "netLines", label: "净增数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "ratio", label: "拆装比", numeric: true }]} rows={netGrowth} summary={netSummary} />
     </ReportPanel>
   </section>;
@@ -220,7 +220,7 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     <ReportPanel label="TOP 10 PROVIDERS" title="服务商进单排名" description="按 I 服务编号汇总当前筛选记录，排名依据月平均计量。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(serviceData)} summary={rankingSummary(serviceData)} />
     </ReportPanel>
-    <ReportPanel label="TOP 10 REMOVALS" title="服务商拆机排名" description="仅统计统一业务判定为拆机的记录；明确的拆机、退订或注销不会被新增量兜底覆盖。">
+    <ReportPanel label="TOP 10 REMOVALS" title="服务商拆机排名" description="仅统计业务属性判断（平台）为拆机的记录；明确的拆机、退订或注销不会被新增量兜底覆盖。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(removalData)} summary={rankingSummary(removalData)} />
     </ReportPanel>
     <ReportPanel wide label="II SERVICE PROVIDERS" title="II服务商进单排名" status="partial" description="按II服务编号汇总；II服务编号为空的记录不纳入排名，也不会用供应商名称代替。">
@@ -268,8 +268,8 @@ export function DataQualityReportTables({ rows }: { rows: BusinessRow[] }) {
     <ReportPanel wide label="DATA QUALITY" title="数据质量检查" description="检查设备唯一键和日期完整性；只输出异常，不修改源数据。">
       <div className="quality-metric-grid">{metrics.map((metric) => <div className={`quality-metric ${metric.status}`} key={metric.key}><span>{metric.label}</span><strong>{number(metric.value)}</strong><small>{metric.description}</small></div>)}</div>
     </ReportPanel>
-    <ReportPanel wide label="DATE FALLBACK AUDIT" title="完工日期兜底审计" description="仅展示未使用初始完工日期的记录，便于核对有效日期来源。">
-      <ReportTable columns={[{ key: "serviceCode", label: "I 服务编号" }, { key: "owner", label: "负责人" }, { key: "initialDate", label: "初始完工日期" }, { key: "rawDate", label: "完工日期" }, { key: "effectiveDate", label: "有效完工日期" }, { key: "source", label: "日期来源" }]} rows={auditRows} emptyText="当前记录均使用初始完工日期，无兜底或缺失记录" />
+    <ReportPanel wide label="DATE FALLBACK AUDIT" title="完工日期兜底审计" description="仅展示未使用初始完工日期的记录，便于核对统计完工日期来源。">
+      <ReportTable columns={[{ key: "serviceCode", label: "I 服务编号" }, { key: "owner", label: "负责人" }, { key: "initialDate", label: "初始完工日期" }, { key: "rawDate", label: "完工日期" }, { key: "effectiveDate", label: "统计完工日期（平台）" }, { key: "source", label: "日期取值来源（平台）" }]} rows={auditRows} emptyText="当前记录均使用初始完工日期，无兜底或缺失记录" />
     </ReportPanel>
   </section>;
 }

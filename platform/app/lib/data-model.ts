@@ -549,9 +549,9 @@ export function buildDataQualityMetrics(rows: BusinessRow[]): DataQualityMetric[
     { key: "device-duplicate", label: "设备编号重复记录", value: duplicateRows, status: "pass", description: "当前筛选结果内按设备编号检查" },
     { key: "initial-date-missing", label: "初始完工日期缺失", value: rows.filter((row) => !row.initialCompletedDate).length, status: "pass", description: "缺失时允许使用完工日期兜底" },
     { key: "date-fallback", label: "完工日期兜底", value: rows.filter((row) => row.completionDateSource === "完工日期兜底").length, status: "pass", description: "已纳入年月、趋势和留存统计" },
-    { key: "effective-date-missing", label: "有效完工日期缺失", value: rows.filter((row) => !row.completedDate).length, status: "pass", description: "初始完工日期和完工日期均为空" },
+    { key: "effective-date-missing", label: "统计完工日期缺失", value: rows.filter((row) => !row.completedDate).length, status: "pass", description: "初始完工日期和完工日期均为空" },
     { key: "date-order", label: "完工日期早于初始完工日期", value: rows.filter((row) => row.initialCompletedDate && row.rawCompletedDate && row.rawCompletedDate < row.initialCompletedDate).length, status: "pass", description: "日期顺序异常需人工复核" },
-    { key: "business-fallback", label: "新增量兜底判定为新装", value: rows.filter((row) => row.businessEventSource === "计量规则兜底").length, status: "pass", description: "业务属性为空或无法识别，由当前计量规则新增量兜底" },
+    { key: "business-fallback", label: "新增量兜底判定为新装", value: rows.filter((row) => row.businessEventSource === "计量规则兜底").length, status: "pass", description: "业务属性为空或无法识别，由按当前日期计算的计量规则中的新增量兜底" },
     { key: "business-rule-conflict", label: "业务属性与新增量冲突", value: rows.filter((row) => /拆机|退订|注销|变更|改造|迁移/.test(row.businessType) && row.meteringRule === "新增量").length, status: "pass", description: "保留明确业务属性，进入人工复核，不由兜底规则覆盖" },
   ];
   return metrics.map((metric) => ({ ...metric, status: metric.key === "business-fallback" ? "pass" : metric.value ? "review" : "pass" }));
