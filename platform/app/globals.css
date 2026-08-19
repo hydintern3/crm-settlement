@@ -273,6 +273,7 @@ tbody tr:hover { background: #f9fbfe; }
 .report-table { margin-top: 15px; max-height: 430px; overflow: auto; }
 .report-table thead { position: sticky; top: 0; z-index: 1; }
 .report-table th { line-height: 1.35; }
+.report-table tfoot td { position: sticky; bottom: 0; background: #eef4fb; border-top: 2px solid #b8c9dc; font-weight: 700; color: #183b68; }
 .availability-note { margin-top: 15px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; color: #7b6950; background: #faf5e9; border-radius: 7px; font-size: 9px; }
 .availability-note strong { flex: 0 0 auto; color: #8f621e; }
 .dimension-tabs { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }

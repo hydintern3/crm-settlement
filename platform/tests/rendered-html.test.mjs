@@ -105,6 +105,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);
   assert.match(pageSource, /ProviderReportTables/);
+  assert.match(pageSource, /SupplierReportTables/);
+  assert.match(pageSource, /设备编号/);
   assert.match(pageSource, /ProfitTargetTables/);
   assert.match(pageSource, /SettlementReportTables/);
   assert.match(pageSource, /CalculationRulePanel/);
@@ -119,6 +121,8 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(reportTablesSource, /完工批次留存分析/);
   assert.match(reportTablesSource, /完工日期兜底审计/);
   assert.match(reportTablesSource, /服务商综合分布/);
+  assert.match(reportTablesSource, /供应商综合分析/);
+  assert.match(reportTablesSource, /总计 \/ 总览/);
   assert.match(reportTablesSource, /服务商拆机排名/);
   assert.match(reportTablesSource, /业务进展多维分析/);
   assert.match(reportTablesSource, /新增月平均计量/);

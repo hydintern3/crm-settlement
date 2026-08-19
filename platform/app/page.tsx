@@ -2,12 +2,13 @@
 
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
-import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, ProfitTargetTables, ProviderReportTables, SalesReportTables, SettlementReportTables } from "./components/ReportTables";
+import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, ProfitTargetTables, ProviderReportTables, SalesReportTables, SettlementReportTables, SupplierReportTables } from "./components/ReportTables";
 import { applyDynamicCalculationRules, buildSettlementReviewSummary, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
 import { BASE_PATH } from "./lib/deployment";
 import type { DataVersionManifest } from "./lib/data-version";
 import { buildChartData } from "./lib/chart-aggregation";
 import { CHART_TYPE_LABELS, DEFAULT_CHART_TEMPLATES, templateDraft, type ChartTemplate, type ChartTemplateDraft, type DimensionField } from "./lib/chart-template";
+import { formatChartNumber, formatWan } from "./lib/formatting";
 
 const LazyImportDialog = lazy(() => import("./components/ImportDialog").then((module) => ({ default: module.ImportDialog })));
 const LazyMonthlyChart = lazy(() => import("./components/AnalyticsCharts").then((module) => ({ default: module.MonthlyChart })));
@@ -18,7 +19,7 @@ const LazyChartBuilder = lazy(() => import("./components/ChartBuilder").then((mo
 
 const NAV_ITEMS = [
   ["总览", "总盘与关键指标"], ["统一查询", "明细筛选与导出"], ["业务分析", "趋势与计量结构"], ["销售分析", "负责人业绩与排名"],
-  ["服务商分析", "I/II 服务商结构与明细"], ["毛利与目标", "目标、成本与毛利"], ["结算中心", "候选、复核与支付"], ["数据中心", "导入、质量与来源"],
+  ["供应商分析", "按供应商字段汇总"], ["服务商分析", "按 I/II 服务编号汇总"], ["毛利与目标", "目标、成本与毛利"], ["结算中心", "候选、复核与支付"], ["数据中心", "导入、质量与来源"],
 ] as const;
 type ViewName = (typeof NAV_ITEMS)[number][0];
 
@@ -26,7 +27,7 @@ const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], owners: [
 const safeText = (value: string | null | undefined) => value?.trim() || "--";
 const serviceFilterValue = (code: string, name: string) => [code, name].filter(Boolean).join(" · ");
 const numberText = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
-const moneyWan = (value: NumericValue) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value / 10000);
+const moneyWan = formatWan;
 
 function LoginScreen({ onLogin }: { onLogin: (username: string) => void }) {
   const [username, setUsername] = useState("");
@@ -68,9 +69,9 @@ function VersionPanel({ versions, activeId, workingId, onActivate, onCompose }: 
     }
   }
   return <Panel label="VERSION HISTORY" title="历史数据版本" className="wide-panel" aside={<div className="version-panel-actions"><span className="tag">历史版本不可变</span>{selectableIds.length >= 2 && <button className="ghost-button" onClick={() => setComposeMode((value) => !value)}>{composeMode ? "取消整合" : "多数据源整合"}</button>}</div>}>
-    <p className="panel-note">每次上传都会生成新版本并自动激活。可选择多个原始上传版本，按设备编号整合为新的不可变版本；较新的 CRM 全量版本优先。</p>
+    <p className="panel-note">每次上传都会生成新版本并自动激活。可选择多个原始上传版本，按设备编号整合为新的不可变版本；较新版本的非空字段优先，空值不会擦除已有值。</p>
     {versions.length === 1 && <div className="version-guidance">当前只有一个版本。再次上传表格后，可切换历史版本或进行多数据源整合。</div>}
-    {composeMode && <div className="compose-box"><div><strong>选择需要整合的原始数据源</strong><span>已选 {selectedIds.length} 个版本，合计 {ordered.filter((version) => selectedIds.includes(version.id)).reduce((sum, version) => sum + version.rowCount, 0).toLocaleString("zh-CN")} 行</span></div><label><span>整合版本名称</span><input value={composeLabel} maxLength={120} onChange={(event) => setComposeLabel(event.target.value)} placeholder="例如：2026年8月 CRM 全量整合版" /></label><div className="compose-actions"><small>同一设备编号由发布时间较新的版本整行覆盖；空设备编号全部保留。</small><button className="primary-button" disabled={selectedIds.length < 2 || Boolean(workingId)} onClick={() => void submitCompose()}>{workingId === "compose" ? "整合中…" : "发布整合版本"}</button></div></div>}
+    {composeMode && <div className="compose-box"><div><strong>选择需要整合的原始数据源</strong><span>已选 {selectedIds.length} 个版本，合计 {ordered.filter((version) => selectedIds.includes(version.id)).reduce((sum, version) => sum + version.rowCount, 0).toLocaleString("zh-CN")} 行</span></div><label><span>整合版本名称</span><input value={composeLabel} maxLength={120} onChange={(event) => setComposeLabel(event.target.value)} placeholder="例如：2026年8月 CRM 全量整合版" /></label><div className="compose-actions"><small>同一设备编号由较新版本的非空字段覆盖；较新空值保留已有值，空设备编号全部保留。</small><button className="primary-button" disabled={selectedIds.length < 2 || Boolean(workingId)} onClick={() => void submitCompose()}>{workingId === "compose" ? "整合中…" : "发布整合版本"}</button></div></div>}
     <div className="version-list">{ordered.length ? ordered.map((version) => {
       const isComposed = version.kind === "composed";
       return <article key={version.id} className={`version-item ${version.id === activeId ? "active" : ""}`}>
@@ -118,13 +119,13 @@ function RankingChart({ items, onSelect }: { items: RankedItem[]; onSelect?: (na
 }
 
 function exportRows(rows: BusinessRow[]) {
-  const headers = ["业务判定", "判定来源", "源业务属性", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "有效完工日期", "日期来源", "表内现日期", "活跃状态", "源计量规则", "当前计量规则", "计算来源", "计算状态", "分期计算标识", "拆机类型", "用户拆机原因", "联系人固话（脱敏）", "付款周期", "服务分类", "线数", "月平均计量"];
+  const headers = ["设备编号", "业务判定", "判定来源", "源业务属性", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "有效完工日期", "日期来源", "表内现日期", "活跃状态", "源计量规则", "当前计量规则", "计算来源", "计算状态", "分期计算标识", "拆机类型", "用户拆机原因", "联系人固话（脱敏）", "付款周期", "服务分类", "线数", "月平均计量（原值）", "月平均计量（万元）", "优惠资费", "营销增值费用", "是否低于授权价", "业务毛利"];
   const quote = (value: unknown) => {
     const source = String(value ?? "");
     const safe = typeof value === "string" && /^[=+\-@]/.test(source.trimStart()) ? `'${source}` : source;
     return `"${safe.replace(/"/g, '""')}"`;
   };
-  const body = rows.map((row) => [row.businessEvent, row.businessEventSource, row.businessType, row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.initialCompletedDate, row.rawCompletedDate, row.completedDate, row.completionDateSource, row.sourceCurrentDate, row.activeStatus, row.sourceMeteringRule, row.meteringRule, row.calculationRuleSource, row.calculationStatus, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked, row.paymentCycle, row.providerCategory, row.lines, row.monthlyMetering].map(quote).join(","));
+  const body = rows.map((row) => [row.deviceCode, row.businessEvent, row.businessEventSource, row.businessType, row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.initialCompletedDate, row.rawCompletedDate, row.completedDate, row.completionDateSource, row.sourceCurrentDate, row.activeStatus, row.sourceMeteringRule, row.meteringRule, row.calculationRuleSource, row.calculationStatus, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked, row.paymentCycle, row.providerCategory, row.lines, row.monthlyMetering, row.monthlyMetering === null ? "" : (row.monthlyMetering / 10_000).toFixed(6), row.discountedTariff, row.marketingFee, row.belowAuthorizedPrice, row.grossProfit].map(quote).join(","));
   const blob = new Blob(["\uFEFF", [headers.map(quote).join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -153,7 +154,7 @@ function TemplateManager({ templates, onEdit, onDuplicate, onTogglePin, onArchiv
 
 function ChartDataDialog({ template, rows, onClose }: { template: ChartTemplate; rows: BusinessRow[]; onClose: () => void }) {
   const data = useMemo(() => buildChartData(rows, template), [rows, template]);
-  return <div className="chart-builder-overlay" role="dialog" aria-modal="true" aria-label={`${template.title} 聚合数据`}><section className="chart-data-dialog"><header><div><span className="section-label">AGGREGATED DATA</span><h2>{template.title} · 聚合数据</h2><p>{data.recordCount.toLocaleString("zh-CN")} 条筛选记录 · {data.groupCount} 个分组 · 单位：{data.unit}</p></div><button className="clear-button" onClick={onClose}>关闭</button></header><div className="table-scroll"><table><thead><tr><th>维度</th>{data.series.map((series) => <th className="number" key={series.name}>{series.name}</th>)}</tr></thead><tbody>{data.categories.map((category, index) => <tr key={category}><td>{category}</td>{data.series.map((series) => <td className="number" key={series.name}>{series.values[index] === null ? "--" : Number(series.values[index]).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</td>)}</tr>)}</tbody></table></div>{data.warnings.map((warning) => <p className="preview-warning" key={warning}>{warning}</p>)}</section></div>;
+  return <div className="chart-builder-overlay" role="dialog" aria-modal="true" aria-label={`${template.title} 聚合数据`}><section className="chart-data-dialog"><header><div><span className="section-label">AGGREGATED DATA</span><h2>{template.title} · 聚合数据</h2><p>{data.recordCount.toLocaleString("zh-CN")} 条筛选记录 · {data.groupCount} 个分组 · 单位：{data.unit}</p></div><button className="clear-button" onClick={onClose}>关闭</button></header><div className="table-scroll"><table><thead><tr><th>维度</th>{data.series.map((series) => <th className="number" key={series.name}>{series.name}</th>)}</tr></thead><tbody>{data.categories.map((category, index) => <tr key={category}><td>{category}</td>{data.series.map((series) => <td className="number" key={series.name}>{formatChartNumber(series.values[index], data.unit)}</td>)}</tr>)}</tbody></table></div>{data.warnings.map((warning) => <p className="preview-warning" key={warning}>{warning}</p>)}</section></div>;
 }
 
 function MultiSelectGrid({ label, options, selected, onChange, limit = 12 }: { label: string; options: string[]; selected: string[]; onChange: (next: string[]) => void; limit?: number }) {
@@ -198,8 +199,8 @@ function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: nu
   const safePage = Math.min(page, pages);
   const visible = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
   return <>
-    <div className="table-scroll"><table><thead><tr><th>业务判定</th><th>判定来源</th><th>源业务属性</th><th>业务名称</th><th>负责人</th><th>供应商</th><th>I服务编号</th><th>I服务简称</th><th>II服务编号</th><th>II服务简称</th><th>有效完工日期</th><th>日期来源</th><th>活跃状态</th><th>计量规则</th><th>计算来源</th><th>计算状态</th><th>分期计算标识</th><th>拆机类型</th><th>用户拆机原因</th><th>联系人固话（脱敏）</th><th>付款周期</th><th>服务分类</th><th className="number">线数</th><th className="number">月平均计量</th></tr></thead>
-      <tbody>{visible.length ? visible.map((row, index) => <tr key={`${row.serviceCode}-${index}`}><td><span className={`business-chip ${row.businessEvent === "拆机" ? "removal" : ""}`}>{safeText(row.businessEvent)}</span></td><td>{safeText(row.businessEventSource)}</td><td>{safeText(row.businessType)}</td><td>{safeText(row.businessName)}</td><td>{safeText(row.owner)}</td><td>{safeText(row.provider)}</td><td className="code">{safeText(row.serviceCode)}</td><td>{safeText(row.serviceName)}</td><td className="code">{safeText(row.serviceCodeII)}</td><td>{safeText(row.serviceNameII)}</td><td>{safeText(row.completedDate)}</td><td><span className={`date-source-chip ${row.completionDateSource === "完工日期兜底" ? "fallback" : row.completionDateSource === "缺失" ? "missing" : ""}`}>{safeText(row.completionDateSource)}</span></td><td><span className={`active-chip ${/不活跃|停止|暂停/.test(row.activeStatus) ? "inactive" : ""}`}>{safeText(row.activeStatus)}</span></td><td>{safeText(row.meteringRule)}</td><td>{safeText(row.calculationRuleSource)}</td><td>{safeText(row.calculationStatus)}</td><td>{safeText(row.installmentCalculationFlag)}</td><td>{safeText(row.removalType)}</td><td>{safeText(row.userRemovalReason)}</td><td>{safeText(row.contactLandlineMasked)}</td><td>{safeText(row.paymentCycle)}</td><td>{safeText(row.providerCategory)}</td><td className="number">{numberText(row.lines)}</td><td className="number">{row.monthlyMetering === null ? "--" : `¥ ${numberText(row.monthlyMetering, 2)}`}</td></tr>) : <tr><td className="empty-cell" colSpan={24}>--　暂无匹配数据</td></tr>}</tbody></table></div>
+    <div className="table-scroll"><table><thead><tr><th>设备编号</th><th>业务判定</th><th>判定来源</th><th>源业务属性</th><th>业务名称</th><th>负责人</th><th>供应商</th><th>I服务编号</th><th>I服务简称</th><th>II服务编号</th><th>II服务简称</th><th>有效完工日期</th><th>日期来源</th><th>活跃状态</th><th>计量规则</th><th>计算来源</th><th>计算状态</th><th>分期计算标识</th><th>拆机类型</th><th>用户拆机原因</th><th>联系人固话（脱敏）</th><th>付款周期</th><th>服务分类</th><th className="number">线数</th><th className="number">月平均计量（万元）</th></tr></thead>
+      <tbody>{visible.length ? visible.map((row, index) => <tr key={`${row.deviceCode || row.serviceCode}-${index}`}><td className="code">{safeText(row.deviceCode)}</td><td><span className={`business-chip ${row.businessEvent === "拆机" ? "removal" : ""}`}>{safeText(row.businessEvent)}</span></td><td>{safeText(row.businessEventSource)}</td><td>{safeText(row.businessType)}</td><td>{safeText(row.businessName)}</td><td>{safeText(row.owner)}</td><td>{safeText(row.provider)}</td><td className="code">{safeText(row.serviceCode)}</td><td>{safeText(row.serviceName)}</td><td className="code">{safeText(row.serviceCodeII)}</td><td>{safeText(row.serviceNameII)}</td><td>{safeText(row.completedDate)}</td><td><span className={`date-source-chip ${row.completionDateSource === "完工日期兜底" ? "fallback" : row.completionDateSource === "缺失" ? "missing" : ""}`}>{safeText(row.completionDateSource)}</span></td><td><span className={`active-chip ${/不活跃|停止|暂停/.test(row.activeStatus) ? "inactive" : ""}`}>{safeText(row.activeStatus)}</span></td><td>{safeText(row.meteringRule)}</td><td>{safeText(row.calculationRuleSource)}</td><td>{safeText(row.calculationStatus)}</td><td>{safeText(row.installmentCalculationFlag)}</td><td>{safeText(row.removalType)}</td><td>{safeText(row.userRemovalReason)}</td><td>{safeText(row.contactLandlineMasked)}</td><td>{safeText(row.paymentCycle)}</td><td>{safeText(row.providerCategory)}</td><td className="number">{numberText(row.lines)}</td><td className="number">{row.monthlyMetering === null ? "--" : `${formatWan(row.monthlyMetering)} 万元`}</td></tr>) : <tr><td className="empty-cell" colSpan={25}>--　暂无匹配数据</td></tr>}</tbody></table></div>
     <div className="table-foot"><span>共 {rows.length} 条 · 第 {safePage} / {pages} 页</span><div className="pager"><button disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))}>上一页</button><button disabled={safePage >= pages} onClick={() => setPage(Math.min(pages, safePage + 1))}>下一页</button></div></div>
   </>;
 }
@@ -504,12 +505,16 @@ export default function Home() {
 
   function navigate(name: ViewName) { setActiveNav(name); window.history.replaceState(null, "", `#${encodeURIComponent(name)}`); }
   function selectRule(name: string) { setFilters((value) => ({ ...value, rules: [name] })); navigate("统一查询"); }
-  function selectRank(name: string, field: "owner" | "provider") { setFilters((value) => field === "owner" ? ({ ...value, owners: [name] }) : ({ ...value, keyword: name })); navigate(field === "owner" ? "销售分析" : "服务商分析"); }
+  function selectRank(name: string, field: "owner" | "supplier" | "service") {
+    setFilters((value) => field === "owner" ? ({ ...value, owners: [name] }) : field === "supplier" ? ({ ...value, providers: [name] }) : ({ ...value, keyword: name }));
+    navigate(field === "owner" ? "销售分析" : field === "supplier" ? "供应商分析" : "服务商分析");
+  }
   function selectChartValue(field: DimensionField, value: string) {
     setFilters((current) => {
       if (field === "businessEvent") return { ...current, types: [value] };
       if (field === "owner") return { ...current, owners: [value] };
       if (field === "provider") return { ...current, providers: [value] };
+      if (field === "serviceCode" || field === "serviceCodeII") return { ...current, keyword: value };
       if (field === "businessName") return { ...current, businessNames: [value] };
       if (field === "activeStatus") return { ...current, statuses: [value] };
       if (field === "meteringRule") return { ...current, rules: [value] };
@@ -557,7 +562,8 @@ export default function Home() {
   else if (activeNav === "统一查询") content = <Panel label="DETAIL QUERY" title="业务明细" aside={<button className="primary-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出筛选结果</button>}><p className="panel-note">筛选、分页和导出均基于当前真实数据；空字段统一显示为 --。</p><DataTable rows={filteredRows} /></Panel>;
   else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} /><BusinessProgressTables rows={filteredRows} rules={effectiveCalculationRules} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section><BusinessReportTables rows={filteredRows} /></>;
   else if (activeNav === "销售分析") content = <><section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SalesReportTables rows={filteredRows} /></>;
-  else if (activeNav === "服务商分析") content = <><section className="module-grid"><Panel label="PROVIDER RANKING" title="服务商进单排名"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "provider")} /></Panel><Panel label="PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><ProviderReportTables rows={filteredRows} /></>;
+  else if (activeNav === "供应商分析") content = <><section className="module-grid"><Panel label="SUPPLIER RANKING" title="供应商进单排名"><RankingChart items={analysis.suppliers} onSelect={(name) => selectRank(name, "supplier")} /></Panel><Panel label="SUPPLIER DETAILS" title="供应商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SupplierReportTables rows={filteredRows} /></>;
+  else if (activeNav === "服务商分析") content = <><section className="module-grid"><Panel label="SERVICE PROVIDER RANKING" title="服务商进单排名（I 服务编号）"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "service")} /></Panel><Panel label="SERVICE PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><ProviderReportTables rows={filteredRows} /></>;
   else if (activeNav === "毛利与目标") content = <ProfitTargetTables />;
   else if (activeNav === "结算中心") content = <><Metrics rows={filteredRows} /><SettlementReportTables /></>;
   else content = <DataCenterView snapshot={snapshot} admin={admin} versions={versions} activeId={activeVersionId} workingId={versionWorking} notice={centerNotice} config={calculationRules} rows={calculatedRows} onUpload={() => setShowImport(true)} onRefresh={() => void refreshDataCenter()} onActivate={(id) => void activateDataVersion(id)} onCompose={composeDataVersions} onLogout={() => void logout()} onConfigChange={setCalculationRules} />;

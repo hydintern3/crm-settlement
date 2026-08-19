@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { buildSnapshot, normalizeSnapshot, toBusinessRow, type BusinessRow, type RawRow, type SheetSource, type Snapshot } from "./data-model.ts";
+import { buildSnapshot, mergeBusinessRows, normalizeSnapshot, toBusinessRow, type BusinessRow, type RawRow, type SheetSource, type Snapshot } from "./data-model.ts";
 
 export type InspectedSheet = SheetSource & {
   id: string;
@@ -168,8 +168,13 @@ export function mergeVersionSnapshots(sources: VersionSnapshotSource[]): Snapsho
         blankKeyRows.push(row);
         continue;
       }
-      if (byDevice.has(row.deviceCode)) duplicateKeys.add(row.deviceCode);
-      byDevice.set(row.deviceCode, row);
+      const existing = byDevice.get(row.deviceCode);
+      if (existing) {
+        duplicateKeys.add(row.deviceCode);
+        byDevice.set(row.deviceCode, mergeBusinessRows(existing, row));
+      } else {
+        byDevice.set(row.deviceCode, row);
+      }
     }
   }
   const rows = [...byDevice.values(), ...blankKeyRows];
@@ -188,7 +193,7 @@ export function mergeVersionSnapshots(sources: VersionSnapshotSource[]): Snapsho
       removedRows: inputRows - rows.length,
       duplicateKeys: duplicateKeys.size,
       blankKeyRows: blankKeyRows.length,
-      strategy: "按版本发布时间从旧到新整合；同一设备编号由较新的 CRM 全量版本整行覆盖；设备编号为空的记录全部保留",
+      strategy: "按版本发布时间从旧到新整合；同一设备编号由较新版本的非空字段覆盖，较新空值保留已有值；设备编号为空的记录全部保留",
     },
   });
 }

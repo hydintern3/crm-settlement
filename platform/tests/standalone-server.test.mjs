@@ -73,7 +73,7 @@ test("standalone server exposes the health endpoint and CRM page", { timeout: 20
     const defaultTemplatesResponse = await fetch(`${origin}/crm/api/dashboard/templates`, { headers: { cookie } });
     const defaultTemplates = await defaultTemplatesResponse.json();
     assert.equal(defaultTemplatesResponse.status, 200);
-    assert.equal(defaultTemplates.templates.length, 4);
+    assert.equal(defaultTemplates.templates.length, 5);
     const chartDraft = defaultChartDraft(50);
     chartDraft.title = "集成测试图表";
     const chartCreateResponse = await fetch(`${origin}/crm/api/dashboard/templates`, { method: "POST", headers: { cookie, origin, "content-type": "application/json" }, body: JSON.stringify({ template: chartDraft }) });

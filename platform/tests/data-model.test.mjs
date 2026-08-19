@@ -59,19 +59,25 @@ test("partial CRM rows remain available while settlement review reasons stay exp
   assert.deepEqual(review, { total: 1, missingMeteringRule: 1, missingMonthlyMetering: 1, annualPlan: 0 });
 });
 
-test("newer full CRM versions replace duplicate devices while blank keys remain", () => {
+test("newer CRM versions override non-empty fields without erasing existing values", () => {
   const snapshot = (label, rows) => ({ mode: "imported", generatedAt: "2026-08-18T00:00:00.000Z", source: { label, files: [`${label}.csv`], currentFile: `${label}.csv`, sheets: [] }, summary: {}, monthly: [], meteringRules: [], owners: [], providers: [], providersII: [], rows });
-  const oldDuplicate = toBusinessRow({ 设备编号: "D-1", 业务名称: "旧名称", 计算状态: "暂停计算", 初始完工日期: "2026-01-01" });
-  const newDuplicate = toBusinessRow({ 设备编号: "D-1", 业务名称: "新名称", 计算状态: "恢复计算", 初始完工日期: "2025-01-01" });
+  const oldDuplicate = toBusinessRow({ 设备编号: "D-1", 业务名称: "活跃完整名称", 供应商: "供应商甲", I服务编号: "S-1", 月平均计量: "123.456789", 计算状态: "暂停计算", 初始完工日期: "2026-01-01", 活跃状态: "活跃" });
+  const newDuplicate = toBusinessRow({ 设备编号: "D-1", 业务名称: "", 计算状态: "恢复计算", 初始完工日期: "", 活跃状态: "不活跃" });
   const result = mergeVersionSnapshots([
     { id: "v1", label: "旧全量", createdAt: "2026-07-01T00:00:00.000Z", snapshot: snapshot("v1", [oldDuplicate, toBusinessRow({ 设备编号: "", 业务名称: "空键旧" })]) },
     { id: "v2", label: "新全量", createdAt: "2026-08-01T00:00:00.000Z", snapshot: snapshot("v2", [newDuplicate, toBusinessRow({ 设备编号: "D-2", 业务名称: "新增设备" }), toBusinessRow({ 设备编号: "", 业务名称: "空键新" })]) },
   ]);
   assert.equal(result.rows.length, 4);
-  assert.equal(result.rows.find((row) => row.deviceCode === "D-1")?.businessName, "新名称");
-  assert.equal(result.rows.find((row) => row.deviceCode === "D-1")?.calculationStatus, "恢复计算");
+  const merged = result.rows.find((row) => row.deviceCode === "D-1");
+  assert.equal(merged?.businessName, "活跃完整名称");
+  assert.equal(merged?.provider, "供应商甲");
+  assert.equal(merged?.serviceCode, "S-1");
+  assert.equal(merged?.monthlyMetering, 123.456789);
+  assert.equal(merged?.initialCompletedDate, "2026-01-01");
+  assert.equal(merged?.activeStatus, "不活跃");
+  assert.equal(merged?.calculationStatus, "恢复计算");
   assert.equal(result.rows.filter((row) => !row.deviceCode).length, 2);
-  assert.deepEqual(result.source.deduplication, { keyField: "设备编号", inputRows: 5, outputRows: 4, removedRows: 1, duplicateKeys: 1, blankKeyRows: 2, strategy: "按版本发布时间从旧到新整合；同一设备编号由较新的 CRM 全量版本整行覆盖；设备编号为空的记录全部保留" });
+  assert.deepEqual(result.source.deduplication, { keyField: "设备编号", inputRows: 5, outputRows: 4, removedRows: 1, duplicateKeys: 1, blankKeyRows: 2, strategy: "按版本发布时间从旧到新整合；同一设备编号由较新版本的非空字段覆盖，较新空值保留已有值；设备编号为空的记录全部保留" });
 });
 
 test("metering rules derive incremental year and month thresholds from the base date", () => {

@@ -1,13 +1,13 @@
 import type { BusinessRow } from "./data-model";
 
-export const CHART_SCHEMA_VERSION = 2;
+export const CHART_SCHEMA_VERSION = 3;
 export const MAX_DASHBOARD_TEMPLATES = 30;
 export const DEFAULT_CHART_TOP_N = 50;
 
 export type ChartType = "bar" | "line" | "area" | "pie" | "donut" | "stackedBar" | "scatter";
 export type ChartSize = "half" | "wide";
 export type TimeGranularity = "year" | "quarter" | "month" | "day";
-export type DimensionField = "completedDate" | "businessEvent" | "businessType" | "businessName" | "owner" | "provider" | "serviceName" | "serviceNameII" | "activeStatus" | "meteringRule" | "paymentCycle" | "providerCategory" | "calculationStatus" | "installmentCalculationFlag" | "removalType";
+export type DimensionField = "completedDate" | "businessEvent" | "businessType" | "businessName" | "owner" | "provider" | "serviceCode" | "serviceName" | "serviceCodeII" | "serviceNameII" | "activeStatus" | "meteringRule" | "paymentCycle" | "providerCategory" | "calculationStatus" | "installmentCalculationFlag" | "removalType";
 export type MeasureField = "rows" | "deviceCode" | "serviceCode" | "lines" | "monthlyMetering" | "discountedTariff" | "marketingFee" | "grossProfit" | "businessEvent" | "activeStatus";
 export type Aggregation = "count" | "distinct" | "sum" | "average" | "min" | "max" | "installs" | "removals" | "netGrowth" | "activeRate";
 
@@ -61,7 +61,9 @@ export const CHART_FIELDS: readonly ChartFieldDefinition[] = [
   { field: "businessName", label: "业务名称", type: "category", filterKey: "businessNames" },
   { field: "owner", label: "负责人", type: "category", filterKey: "owners" },
   { field: "provider", label: "供应商", type: "category", filterKey: "providers" },
+  { field: "serviceCode", label: "I 服务编号", type: "category", filterKey: "services" },
   { field: "serviceName", label: "I 服务", type: "category", filterKey: "services" },
+  { field: "serviceCodeII", label: "II 服务编号", type: "category", filterKey: "servicesII" },
   { field: "serviceNameII", label: "II 服务", type: "category", filterKey: "servicesII" },
   { field: "activeStatus", label: "活跃状态", type: "category", filterKey: "statuses" },
   { field: "meteringRule", label: "计量规则", type: "category", filterKey: "rules" },
@@ -76,7 +78,7 @@ export type MeasureDefinition = {
   field: MeasureField;
   label: string;
   aggregations: readonly Aggregation[];
-  unit: "条" | "线" | "元" | "%";
+  unit: "条" | "线" | "万元" | "%";
 };
 
 export const CHART_MEASURE_FIELDS: readonly MeasureDefinition[] = [
@@ -84,10 +86,10 @@ export const CHART_MEASURE_FIELDS: readonly MeasureDefinition[] = [
   { field: "deviceCode", label: "设备编号", aggregations: ["distinct"], unit: "条" },
   { field: "serviceCode", label: "服务编号", aggregations: ["distinct"], unit: "条" },
   { field: "lines", label: "线数", aggregations: ["sum", "average", "min", "max"], unit: "线" },
-  { field: "monthlyMetering", label: "月平均计量", aggregations: ["sum", "average", "min", "max"], unit: "元" },
-  { field: "discountedTariff", label: "折扣后资费", aggregations: ["sum", "average", "min", "max"], unit: "元" },
-  { field: "marketingFee", label: "营销费", aggregations: ["sum", "average", "min", "max"], unit: "元" },
-  { field: "grossProfit", label: "毛利", aggregations: ["sum", "average", "min", "max"], unit: "元" },
+  { field: "monthlyMetering", label: "月平均计量", aggregations: ["sum", "average", "min", "max"], unit: "万元" },
+  { field: "discountedTariff", label: "折扣后资费", aggregations: ["sum", "average", "min", "max"], unit: "万元" },
+  { field: "marketingFee", label: "营销费", aggregations: ["sum", "average", "min", "max"], unit: "万元" },
+  { field: "grossProfit", label: "毛利", aggregations: ["sum", "average", "min", "max"], unit: "万元" },
   { field: "businessEvent", label: "业务增减", aggregations: ["installs", "removals", "netGrowth"], unit: "条" },
   { field: "activeStatus", label: "活跃状态", aggregations: ["activeRate"], unit: "%" },
 ] as const;
@@ -125,7 +127,7 @@ export function defaultChartDraft(order = 100): ChartTemplateDraft {
     chartType: "bar",
     dimension: { field: "businessEvent" },
     measures: [{ field: "rows", aggregation: "count" }],
-    options: { topN: DEFAULT_CHART_TOP_N, includeEmpty: false, showOther: true, sort: "valueDesc", orientation: "vertical", showLabels: false, showLegend: true, smooth: false, size: "half", height: 300 },
+    options: { topN: DEFAULT_CHART_TOP_N, includeEmpty: false, showOther: true, sort: "valueDesc", orientation: "vertical", showLabels: true, showLegend: true, smooth: false, size: "half", height: 300 },
     pinned: true,
     archived: false,
     order,
@@ -181,7 +183,7 @@ export function parseChartDraft(value: unknown): ChartTemplateDraft {
       showOther: boolean(optionsSource.showOther, true),
       sort: ["dimensionAsc", "dimensionDesc", "valueAsc", "valueDesc"].includes(String(optionsSource.sort)) ? optionsSource.sort as ChartTemplateDraft["options"]["sort"] : "valueDesc",
       orientation: optionsSource.orientation === "horizontal" ? "horizontal" : "vertical",
-      showLabels: boolean(optionsSource.showLabels, false),
+      showLabels: true,
       showLegend: boolean(optionsSource.showLegend, true),
       smooth: boolean(optionsSource.smooth, false),
       size: optionsSource.size === "wide" ? "wide" : "half",
@@ -197,10 +199,8 @@ export function parseChartDraft(value: unknown): ChartTemplateDraft {
 }
 
 export function migrateChartDraft(draft: ChartTemplateDraft, sourceSchemaVersion: number) {
-  if (sourceSchemaVersion < 2 && draft.options.topN === 10 && draft.options.showOther) {
-    return { ...draft, options: { ...draft.options, topN: DEFAULT_CHART_TOP_N } };
-  }
-  return draft;
+  const topN = sourceSchemaVersion < 2 && draft.options.topN === 10 && draft.options.showOther ? DEFAULT_CHART_TOP_N : draft.options.topN;
+  return { ...draft, options: { ...draft.options, topN, showLabels: true } };
 }
 
 export function validateChartDraft(draft: ChartTemplateDraft) {
@@ -224,7 +224,8 @@ export const DEFAULT_CHART_TEMPLATES: readonly ChartTemplate[] = [
   systemTemplate("system-monthly-metering", { ...defaultChartDraft(10), title: "月平均计量趋势", description: "按有效完工月份汇总月平均计量", chartType: "bar", dimension: { field: "completedDate", timeGranularity: "month" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, sort: "dimensionAsc", size: "wide" } }),
   systemTemplate("system-metering-rule", { ...defaultChartDraft(20), title: "计量规则分布", description: "新增量、新量、存量和超期记录结构", chartType: "donut", dimension: { field: "meteringRule" }, measures: [{ field: "rows", aggregation: "count" }] }),
   systemTemplate("system-owner-ranking", { ...defaultChartDraft(30), title: "负责人业绩", description: "负责人月平均计量 Top 50", dimension: { field: "owner" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "服务商进单", description: "供应商月平均计量 Top 50", dimension: { field: "provider" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
+  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "供应商进单", description: "按供应商汇总月平均计量 Top 50", dimension: { field: "provider" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
+  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商进单", description: "按 I 服务编号汇总月平均计量 Top 50", dimension: { field: "serviceCode" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
 ] as const;
 
 export function templateDraft(template: ChartTemplate): ChartTemplateDraft {

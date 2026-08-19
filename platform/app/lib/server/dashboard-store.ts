@@ -34,13 +34,18 @@ async function readDashboard(): Promise<DashboardFile> {
     if (!Array.isArray(parsed.templates)) throw new Error("总览模板文件格式无效");
     const templates = parsed.templates.map((template) => {
       const sourceSchemaVersion = Number(template.schemaVersion ?? parsed.schemaVersion ?? 1);
+      const migrated = migrateChartDraft(parseChartDraft(template), sourceSchemaVersion);
+      const corrected = template.id === "system-provider-ranking" && sourceSchemaVersion < 3
+        ? { ...migrated, title: "供应商进单", description: "按供应商汇总月平均计量 Top 50", dimension: { field: "provider" as const } }
+        : migrated;
       return {
         ...template,
-        ...migrateChartDraft(parseChartDraft(template), sourceSchemaVersion),
+        ...corrected,
         schemaVersion: CHART_SCHEMA_VERSION,
       };
     });
-    return { schemaVersion: CHART_SCHEMA_VERSION, templates };
+    const missingDefaults = cloneDefaults().filter((systemTemplate) => !templates.some((template) => template.id === systemTemplate.id));
+    return { schemaVersion: CHART_SCHEMA_VERSION, templates: [...templates, ...missingDefaults] };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { schemaVersion: CHART_SCHEMA_VERSION, templates: cloneDefaults() };
     throw error;

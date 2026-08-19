@@ -159,6 +159,7 @@ export type Snapshot = {
   monthly: Array<{ month: string; installs: number; removals: number; amount: NumericValue }>;
   meteringRules: Array<{ label: string; value: number; color: string }>;
   owners: RankedItem[];
+  suppliers: RankedItem[];
   providers: RankedItem[];
   providersII: RankedItem[];
   rows: BusinessRow[];
@@ -181,6 +182,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   monthly: [],
   meteringRules: [],
   owners: [],
+  suppliers: [],
   providers: [],
   providersII: [],
   rows: [],
@@ -277,6 +279,22 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     belowAuthorizedPrice: textValue(first(row, ["是否低于授权价"])),
     grossProfit: numericValue(first(row, ["业务毛利（完成）", "业务毛利(完成)", "业务毛利（未完成）", "业务毛利(未完成)", "业务毛利"])),
   };
+}
+
+export function mergeBusinessRows(older: BusinessRow, newer: BusinessRow): BusinessRow {
+  const merged = { ...older } as BusinessRow;
+  for (const [key, value] of Object.entries(newer) as Array<[keyof BusinessRow, BusinessRow[keyof BusinessRow]]>) {
+    if (value !== "" && value !== null && value !== undefined) {
+      (merged as unknown as Record<keyof BusinessRow, BusinessRow[keyof BusinessRow]>)[key] = value;
+    }
+  }
+
+  merged.completedDate = merged.initialCompletedDate || merged.rawCompletedDate;
+  merged.completionDateSource = merged.initialCompletedDate ? "初始完工日期" : merged.rawCompletedDate ? "完工日期兜底" : "缺失";
+  const event = classifyBusinessEvent(merged.businessType, merged.meteringRule || merged.sourceMeteringRule);
+  merged.businessEvent = event.businessEvent;
+  merged.businessEventSource = event.businessEventSource;
+  return merged;
 }
 
 function sumKnown(values: NumericValue[]): NumericValue {
@@ -413,10 +431,10 @@ export function applyDynamicCalculationRules(rows: BusinessRow[], config: Calcul
   });
 }
 
-export function buildBusinessProgress(rows: BusinessRow[], dimension: "company" | "owner" | "service" | "service2", denominator: "total" | "installs"): BusinessProgressRow[] {
+export function buildBusinessProgress(rows: BusinessRow[], dimension: "company" | "owner" | "supplier" | "service" | "service2", denominator: "total" | "installs"): BusinessProgressRow[] {
   const groups = new Map<string, BusinessRow[]>();
   for (const row of rows) {
-    const key = dimension === "company" ? "公司总体" : dimension === "owner" ? row.owner : dimension === "service" ? row.serviceCode : row.serviceCodeII;
+    const key = dimension === "company" ? "公司总体" : dimension === "owner" ? row.owner : dimension === "supplier" ? row.provider : dimension === "service" ? row.serviceCode : row.serviceCodeII;
     if (!key) continue;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
@@ -579,6 +597,7 @@ export function buildSnapshot(
       .map(([month, item]) => ({ month, installs: item.installs, removals: item.removals, amount: sumKnown(item.amounts) })),
     meteringRules: [...ruleMap.entries()].map(([label, value], index) => ({ label, value, color: RULE_COLORS[label] ?? ["#7657d5", "#2a91a8", "#8b6a4f"][index % 3] })),
     owners: buildRanking(rows, "owner"),
+    suppliers: buildRanking(rows, "provider"),
     providers: buildRanking(rows, "service"),
     providersII: buildRanking(rows, "service2"),
     rows,

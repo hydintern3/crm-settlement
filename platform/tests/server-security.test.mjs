@@ -52,12 +52,12 @@ test("dashboard templates persist independently with revision conflict protectio
   const directory = await mkdtemp(join(tmpdir(), "crm-dashboard-test-"));
   process.env.CRM_DATA_DIR = directory;
   try {
-    assert.equal((await listChartTemplates()).length, 4);
+    assert.equal((await listChartTemplates()).length, 5);
     const draft = defaultChartDraft(50);
     draft.title = "测试自定义图表";
     const created = await createChartTemplate(draft, "finance-admin");
     assert.equal(created.revision, 1);
-    assert.equal((await listChartTemplates()).length, 5);
+    assert.equal((await listChartTemplates()).length, 6);
     const changed = templateDraft(created);
     changed.description = "修改后的口径说明";
     const updated = await updateChartTemplate(created.id, changed, created.revision, "finance-admin");

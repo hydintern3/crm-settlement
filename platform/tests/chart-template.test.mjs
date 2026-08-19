@@ -4,6 +4,7 @@ import test from "node:test";
 import { buildChartData } from "../app/lib/chart-aggregation.ts";
 import { defaultChartDraft, migrateChartDraft, parseChartDraft, validateChartDraft } from "../app/lib/chart-template.ts";
 import { toBusinessRow } from "../app/lib/data-model.ts";
+import { formatWan } from "../app/lib/formatting.ts";
 
 const rows = [
   toBusinessRow({ 业务属性: "新装", 业务名称: "A", 设备编号: "D-1", 负责人: "张三", 供应商: "甲", 初始完工日期: "2026-01-02", 月平均计量: "100", 线数: "2", 活跃状态: "活跃", 计量规则: "新增量" }),
@@ -19,8 +20,12 @@ test("chart aggregation handles date buckets, nulls and real zero", () => {
   draft.options.sort = "dimensionAsc";
   const data = buildChartData(rows, draft);
   assert.deepEqual(data.categories, ["2026-01", "2026-02"]);
-  assert.deepEqual(data.series[0].values, [150, 0]);
+  assert.deepEqual(data.series[0].values, [0.015, 0]);
+  assert.equal(data.unit, "万元");
   assert.equal(data.recordCount, 4);
+  assert.equal(formatWan(123.456789), "0.012346");
+  assert.equal(formatWan(0), "0.000000");
+  assert.equal(formatWan(null), "--");
 });
 
 test("chart aggregation supports business metrics, distinct counts and top N other", () => {
@@ -61,6 +66,7 @@ test("template parser constrains unsafe and incompatible configurations", () => 
   const parsed = parseChartDraft({ ...defaultChartDraft(), title: "  自定义图表  ", options: { ...defaultChartDraft().options, topN: 999 } });
   assert.equal(parsed.title, "自定义图表");
   assert.equal(parsed.options.topN, 50);
+  assert.equal(parseChartDraft({ ...defaultChartDraft(), options: { ...defaultChartDraft().options, showLabels: false } }).options.showLabels, true);
   const invalid = { ...defaultChartDraft(), chartType: "pie", measures: [{ field: "rows", aggregation: "count" }, { field: "lines", aggregation: "sum" }] };
   assert.deepEqual(validateChartDraft(invalid), ["饼图和环形图只能使用一个指标"]);
   assert.throws(() => parseChartDraft(invalid), /只能使用一个指标/);
@@ -74,6 +80,7 @@ test("legacy top 10 templates with other grouping migrate to top 50", () => {
   legacy.options.topN = 10;
   legacy.options.showOther = true;
   assert.equal(migrateChartDraft(legacy, 1).options.topN, 50);
+  assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, showLabels: false } }, 2).options.showLabels, true);
   legacy.options.showOther = false;
   assert.equal(migrateChartDraft(legacy, 1).options.topN, 10);
   assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, topN: 20, showOther: true } }, 1).options.topN, 20);

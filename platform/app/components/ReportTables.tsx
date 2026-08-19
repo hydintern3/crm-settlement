@@ -8,20 +8,27 @@ import {
   buildMonthlyBusiness,
   buildNetGrowth,
   buildPerformance,
+  isActive,
   isRemoval,
   type BusinessRow,
   type CalculationRuleConfig,
   type NumericValue,
 } from "../lib/data-model";
 import { REPORTS } from "../lib/report-registry";
+import { formatWan } from "../lib/formatting";
 
 type CellValue = ReactNode;
 type TableRow = Record<string, CellValue>;
 type Column = { key: string; label: string; numeric?: boolean };
 
 const number = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
-const money = (value: NumericValue) => value === null ? "--" : `¥ ${number(value, 2)}`;
+const money = (value: NumericValue) => value === null ? "--" : `${formatWan(value)} 万元`;
 const percent = (value: NumericValue) => value === null ? "--" : `${number(value, 1)}%`;
+const knownSum = (values: NumericValue[]): NumericValue => {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length ? known.reduce((sum, value) => sum + value, 0) : null;
+};
+const lineCount = (row: BusinessRow) => row.lines ?? 1;
 
 function ReportPanel({ label, title, description, status = "ready", children, wide = false }: {
   label: string;
@@ -39,25 +46,29 @@ function ReportPanel({ label, title, description, status = "ready", children, wi
 }
 
 export function BusinessProgressTables({ rows, rules }: { rows: BusinessRow[]; rules: CalculationRuleConfig }) {
-  const [dimension, setDimension] = useState<"company" | "owner" | "service" | "service2">("company");
-  const dimensions = [["company", "公司总体"], ["owner", "各销售"], ["service", "I服务商"], ["service2", "II服务商"]] as const;
-  const progressRows = buildBusinessProgress(rows, dimension, rules.removalRateDenominator).map((item) => ({
+  const [dimension, setDimension] = useState<"company" | "owner" | "supplier" | "service" | "service2">("company");
+  const dimensions = [["company", "公司总体"], ["owner", "各销售"], ["supplier", "供应商"], ["service", "I服务商"], ["service2", "II服务商"]] as const;
+  const formatProgress = (item: ReturnType<typeof buildBusinessProgress>[number]) => ({
     key: item.key, label: item.label, total: number(item.totalLines), installs: number(item.installs), installAmount: money(item.installMonthlyMetering),
     removals: number(item.removals), removalAmount: money(item.removalMonthlyMetering), removalRate: percent(item.removalRate),
     netGrowth: number(item.netGrowth), netAmount: money(item.netMonthlyMetering), netTariff: money(item.netAverageTariff), amount: money(item.monthlyMetering),
     newMargin: money(item.newGrossProfit), stockMargin: money(item.stockGrossProfit),
-  }));
+  });
+  const progressRows = buildBusinessProgress(rows, dimension, rules.removalRateDenominator).map((item) => formatProgress(item));
+  const overall = buildBusinessProgress(rows, "company", rules.removalRateDenominator)[0];
+  const summary = overall ? { ...formatProgress(overall), key: "summary", label: "总计 / 总览" } : undefined;
   const denominatorText = rules.removalRateDenominator === "total" ? "拆机线数 / 总线数" : "拆机线数 / 新增线数";
-  return <section className="module-grid report-module-grid"><ReportPanel wide label="BUSINESS PROGRESS" title="业务进展多维分析" status="partial" description={`同一套指标支持公司、销售、I服务商和II服务商切换；当前拆机率口径：${denominatorText}。净增长月平均计量＝新增月平均计量－拆机月平均计量；净增月平均资费＝净增长月平均计量÷净增长线路数，净增长线路数为0时显示--。`}>
+  return <section className="module-grid report-module-grid"><ReportPanel wide label="BUSINESS PROGRESS" title="业务进展多维分析" status="partial" description={`同一套指标支持公司、销售、供应商、I服务商和II服务商切换；当前拆机率口径：${denominatorText}。净增长月平均计量＝新增月平均计量－拆机月平均计量；净增月平均资费＝净增长月平均计量÷净增长线路数，净增长线路数为0时显示--。`}>
     <div className="dimension-tabs" role="tablist" aria-label="业务进展分析维度">{dimensions.map(([key, label]) => <button key={key} className={dimension === key ? "active" : ""} onClick={() => setDimension(key)}>{label}</button>)}</div>
-    <ReportTable columns={[{ key: "label", label: "分析对象" }, { key: "total", label: "总线路数", numeric: true }, { key: "amount", label: "总月平均计量", numeric: true }, { key: "installs", label: "新增线路数", numeric: true }, { key: "installAmount", label: "新增月平均计量", numeric: true }, { key: "removals", label: "拆机线路数", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "netGrowth", label: "净增长线路数", numeric: true }, { key: "netAmount", label: "净增长月平均计量", numeric: true }, { key: "netTariff", label: "净增月平均资费", numeric: true }, { key: "newMargin", label: "新增毛利", numeric: true }, { key: "stockMargin", label: "存量毛利", numeric: true }]} rows={progressRows} emptyText={dimension === "service2" ? "当前筛选记录没有II服务编号" : "暂无匹配数据"} />
+    <ReportTable columns={[{ key: "label", label: "分析对象" }, { key: "total", label: "总线路数", numeric: true }, { key: "amount", label: "总月平均计量", numeric: true }, { key: "installs", label: "新增线路数", numeric: true }, { key: "installAmount", label: "新增月平均计量", numeric: true }, { key: "removals", label: "拆机线路数", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "netGrowth", label: "净增长线路数", numeric: true }, { key: "netAmount", label: "净增长月平均计量", numeric: true }, { key: "netTariff", label: "净增月平均资费", numeric: true }, { key: "newMargin", label: "新增毛利", numeric: true }, { key: "stockMargin", label: "存量毛利", numeric: true }]} rows={progressRows} summary={summary} emptyText={dimension === "service2" ? "当前筛选记录没有II服务编号" : "暂无匹配数据"} />
     {progressRows.every((row) => row.newMargin === "--" && row.stockMargin === "--") && <div className="availability-note"><strong>毛利暂未启用</strong><span>需补充运营有效金额、结算有效金额及新增/存量毛利规则。</span></div>}
   </ReportPanel></section>;
 }
 
-function ReportTable({ columns, rows, emptyText = "暂无匹配数据" }: { columns: Column[]; rows: TableRow[]; emptyText?: string }) {
+function ReportTable({ columns, rows, summary, emptyText = "暂无匹配数据" }: { columns: Column[]; rows: TableRow[]; summary?: TableRow; emptyText?: string }) {
   return <div className="table-scroll report-table"><table><thead><tr>{columns.map((column) => <th key={column.key} className={column.numeric ? "number" : ""}>{column.label}</th>)}</tr></thead>
-    <tbody>{rows.length ? rows.map((row, index) => <tr key={String(row.key ?? index)}>{columns.map((column) => <td key={column.key} className={column.numeric ? "number" : ""}>{row[column.key] ?? "--"}</td>)}</tr>) : <tr><td className="empty-cell" colSpan={columns.length}>--　{emptyText}</td></tr>}</tbody></table></div>;
+    <tbody>{rows.length ? rows.map((row, index) => <tr key={String(row.key ?? index)}>{columns.map((column) => <td key={column.key} className={column.numeric ? "number" : ""}>{row[column.key] ?? "--"}</td>)}</tr>) : <tr><td className="empty-cell" colSpan={columns.length}>--　{emptyText}</td></tr>}</tbody>
+    {rows.length && summary ? <tfoot><tr>{columns.map((column) => <td key={column.key} className={column.numeric ? "number" : ""}>{summary[column.key] ?? "--"}</td>)}</tr></tfoot> : null}</table></div>;
 }
 
 function UnavailableTable({ columns, missing, note }: { columns: string[]; missing: string[]; note?: string }) {
@@ -67,7 +78,8 @@ function UnavailableTable({ columns, missing, note }: { columns: string[]; missi
 }
 
 export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
-  const monthly = buildMonthlyBusiness(rows).map((item) => ({
+  const monthlyData = buildMonthlyBusiness(rows);
+  const monthly = monthlyData.map((item) => ({
     key: item.month,
     month: item.month,
     installs: number(item.installs),
@@ -85,7 +97,8 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
     quarterRatio: "--",
     annualRatio: "--",
   }));
-  const cohorts = buildCompletionCohorts(rows).map((item) => ({
+  const cohortData = buildCompletionCohorts(rows);
+  const cohorts = cohortData.map((item) => ({
     key: item.month,
     month: item.month,
     lines: number(item.lines),
@@ -95,6 +108,20 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
     amount: money(item.monthlyMetering),
     activeAmount: money(item.activeMonthlyMetering),
   }));
+  const monthlyInstalls = monthlyData.reduce((sum, item) => sum + item.installs, 0);
+  const monthlyRemovals = monthlyData.reduce((sum, item) => sum + item.removals, 0);
+  const monthlySummary = {
+    key: "summary", month: "总计 / 总览", installs: number(monthlyInstalls), installAmount: money(knownSum(monthlyData.map((item) => item.installAmount))),
+    removals: number(monthlyRemovals), removalAmount: money(knownSum(monthlyData.map((item) => item.removalAmount))), activeLines: number(monthlyData.reduce((sum, item) => sum + item.activeLines, 0)),
+    activeAmount: money(knownSum(monthlyData.map((item) => item.activeAmount))), quarterTarget: "--", quarterCompletion: "--", annualTarget: "--", annualCompletion: "--",
+    ratio: percent(monthlyInstalls ? monthlyRemovals / monthlyInstalls * 100 : null), quarterRatioTarget: "--", quarterRatio: "--", annualRatio: "--",
+  };
+  const cohortLines = cohortData.reduce((sum, item) => sum + item.lines, 0);
+  const cohortActive = cohortData.reduce((sum, item) => sum + item.activeLines, 0);
+  const cohortSummary = {
+    key: "summary", month: "总计 / 总览", lines: number(cohortLines), activeLines: number(cohortActive), removalLines: number(cohortData.reduce((sum, item) => sum + item.removalLines, 0)),
+    activeRate: percent(cohortLines ? cohortActive / cohortLines * 100 : null), amount: money(knownSum(cohortData.map((item) => item.monthlyMetering))), activeAmount: money(knownSum(cohortData.map((item) => item.activeMonthlyMetering))),
+  };
   return <section className="module-grid report-module-grid">
     <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description="完工年月来自当前筛选记录；目标与历史时点活跃口径尚未提供，保持 --。">
       <ReportTable columns={[
@@ -103,43 +130,57 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
         { key: "activeAmount", label: "当前活跃月平均计量", numeric: true }, { key: "quarterTarget", label: "季度目标", numeric: true }, { key: "quarterCompletion", label: "季度完成比", numeric: true },
         { key: "annualTarget", label: "全年目标", numeric: true }, { key: "annualCompletion", label: "全年完成比", numeric: true }, { key: "ratio", label: "月度拆装比", numeric: true },
         { key: "quarterRatioTarget", label: "季度拆装比目标", numeric: true }, { key: "quarterRatio", label: "季度拆装比", numeric: true }, { key: "annualRatio", label: "全年拆装比", numeric: true },
-      ]} rows={monthly} />
+      ]} rows={monthly} summary={monthlySummary} />
     </ReportPanel>
     <ReportPanel wide label="COMPLETION COHORT" title="完工批次留存分析" description="按有效完工月份形成批次；有效完工日期优先取初始完工日期，缺失时使用完工日期兜底。">
       <ReportTable columns={[
         { key: "month", label: "有效完工月份" }, { key: "lines", label: "完工线数", numeric: true }, { key: "activeLines", label: "当前活跃线数", numeric: true },
         { key: "removalLines", label: "拆机线数", numeric: true }, { key: "activeRate", label: "当前活跃率", numeric: true },
         { key: "amount", label: "月平均计量", numeric: true }, { key: "activeAmount", label: "活跃月平均计量", numeric: true },
-      ]} rows={cohorts} />
+      ]} rows={cohorts} summary={cohortSummary} />
     </ReportPanel>
   </section>;
 }
 
 export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
-  const performance = buildPerformance(rows, "owner", { amount: "discountedTariff" }).map((item) => ({
+  const performanceData = buildPerformance(rows, "owner", { amount: "discountedTariff" });
+  const performance = performanceData.map((item) => ({
     key: item.key, owner: item.label, lines: number(item.lines), amount: money(item.amount), average: money(item.average), share: percent(item.share), rank: item.rank,
   }));
-  const netGrowth = buildNetGrowth(rows).map((item) => ({
+  const netGrowthData = buildNetGrowth(rows);
+  const netGrowth = netGrowthData.map((item) => ({
     key: item.owner, owner: item.owner, installs: number(item.installs), installAmount: money(item.installAmount), removals: number(item.removals), removalAmount: money(item.removalAmount), netLines: number(item.netLines), netAmount: money(item.netAmount), ratio: percent(item.installRemovalRatio),
   }));
-  const marketing = buildPerformance(rows, "owner", { amount: "marketingFee" }).map((item) => ({ key: item.key, owner: item.label, lines: number(item.lines), amount: money(item.amount) }));
+  const marketingData = buildPerformance(rows, "owner", { amount: "marketingFee" });
+  const marketing = marketingData.map((item) => ({ key: item.key, owner: item.label, lines: number(item.lines), amount: money(item.amount) }));
+  const performanceLines = performanceData.reduce((sum, item) => sum + item.lines, 0);
+  const performanceAmount = knownSum(performanceData.map((item) => item.amount));
+  const performanceSummary = { key: "summary", owner: "总计 / 总览", lines: number(performanceLines), amount: money(performanceAmount), average: money(performanceAmount === null ? null : performanceAmount / Math.max(performanceLines, 1)), share: performanceData.length ? "100.0%" : "--", rank: "--" };
+  const marketingSummary = { key: "summary", owner: "总计 / 总览", lines: number(marketingData.reduce((sum, item) => sum + item.lines, 0)), amount: money(knownSum(marketingData.map((item) => item.amount))) };
+  const netInstalls = netGrowthData.reduce((sum, item) => sum + item.installs, 0);
+  const netRemovals = netGrowthData.reduce((sum, item) => sum + item.removals, 0);
+  const netSummary = { key: "summary", owner: "总计 / 总览", installs: number(netInstalls), installAmount: money(knownSum(netGrowthData.map((item) => item.installAmount))), removals: number(netRemovals), removalAmount: money(knownSum(netGrowthData.map((item) => item.removalAmount))), netLines: number(netInstalls - netRemovals), netAmount: money(knownSum(netGrowthData.map((item) => item.netAmount))), ratio: percent(netInstalls ? netRemovals / netInstalls * 100 : null) };
   return <section className="module-grid report-module-grid">
     <ReportPanel label="SALES COMPLETION" title="销售完成情况（优惠资费口径）" status="partial" description="业务额取源表优惠资费有效值；空值不按月平均计量替代。">
-      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务额", numeric: true }, { key: "average", label: "业务均值", numeric: true }, { key: "share", label: "贡献率", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={performance} />
+      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务额", numeric: true }, { key: "average", label: "业务均值", numeric: true }, { key: "share", label: "贡献率", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={performance} summary={performanceSummary} />
     </ReportPanel>
     <ReportPanel label="MARKETING COST" title="营销增值费用分析" status="partial" description="金额取增值或营销字段；无有效金额时显示 --。">
-      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "金额", numeric: true }]} rows={marketing} />
+      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "金额", numeric: true }]} rows={marketing} summary={marketingSummary} />
     </ReportPanel>
     <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新装、拆机、变更优先按源业务属性识别；属性为空或无法识别时，当前计量规则为新增量可兜底判为新装。拆装比为拆机线数 / 新装线数。">
-      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "installs", label: "新增数", numeric: true }, { key: "installAmount", label: "新增业务量", numeric: true }, { key: "removals", label: "拆机数", numeric: true }, { key: "removalAmount", label: "拆机业务量", numeric: true }, { key: "netLines", label: "净增数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "ratio", label: "拆装比", numeric: true }]} rows={netGrowth} />
+      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "installs", label: "新增数", numeric: true }, { key: "installAmount", label: "新增业务量", numeric: true }, { key: "removals", label: "拆机数", numeric: true }, { key: "removalAmount", label: "拆机业务量", numeric: true }, { key: "netLines", label: "净增数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "ratio", label: "拆装比", numeric: true }]} rows={netGrowth} summary={netSummary} />
     </ReportPanel>
   </section>;
 }
 
 export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
-  const toRows = (removalsOnly: boolean) => buildPerformance(rows, "service", { removalsOnly }).slice(0, 10).map((item) => ({
+  const serviceData = buildPerformance(rows, "service");
+  const removalData = buildPerformance(rows, "service", { removalsOnly: true });
+  const serviceIIData = buildPerformance(rows, "service2");
+  const toRows = (data: ReturnType<typeof buildPerformance>) => data.slice(0, 10).map((item) => ({
     key: item.key, code: item.label, name: item.secondary || "--", lines: number(item.lines), amount: money(item.amount), share: percent(item.share), rank: item.rank,
   }));
+  const rankingSummary = (data: ReturnType<typeof buildPerformance>) => ({ key: "summary", code: "总计 / 总览", name: "--", lines: number(data.reduce((sum, item) => sum + item.lines, 0)), amount: money(knownSum(data.map((item) => item.amount))), share: data.length ? "100.0%" : "--", rank: "--" });
   const categories = new Map<string, BusinessRow[]>();
   for (const row of rows) if (row.providerCategory) categories.set(row.providerCategory, [...(categories.get(row.providerCategory) ?? []), row]);
   const categoryRows = [...categories.entries()].map(([category, group]) => {
@@ -164,21 +205,50 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
       removalRate: percent(lines ? (removalLines / lines) * 100 : null),
     };
   }).sort((left, right) => Number(String(right.lines).replace(/,/g, "")) - Number(String(left.lines).replace(/,/g, "")));
+  const serviceRows = rows.filter((row) => row.serviceCode);
+  const serviceLines = serviceRows.reduce((sum, row) => sum + lineCount(row), 0);
+  const activeLines = serviceRows.filter(isActive).reduce((sum, row) => sum + lineCount(row), 0);
+  const removalLines = serviceRows.filter(isRemoval).reduce((sum, row) => sum + lineCount(row), 0);
+  const providerOverviewSummary = { key: "summary", code: "总计 / 总览", name: "--", lines: number(serviceLines), activeLines: number(activeLines), removalLines: number(removalLines), amount: money(knownSum(serviceRows.map((row) => row.monthlyMetering))), removalRate: percent(serviceLines ? removalLines / serviceLines * 100 : null) };
+  const categorizedRows = rows.filter((row) => row.providerCategory);
+  const categorizedRemovals = categorizedRows.filter(isRemoval);
+  const categorySummary = { key: "summary", category: "总计 / 总览", lines: number(categorizedRows.length), amount: money(knownSum(categorizedRows.map((row) => row.monthlyMetering))), removalRate: percent(categorizedRows.length ? categorizedRemovals.length / categorizedRows.length * 100 : null), note: "仅汇总有服务分类的记录" };
   return <section className="module-grid report-module-grid">
     <ReportPanel wide label="PROVIDER OVERVIEW" title="服务商综合分布" description="按 I 服务编号汇总进单、当前活跃、拆机、计量与拆机率，便于在同一张表比较规模和留存。">
-      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "总线数", numeric: true }, { key: "activeLines", label: "活跃线数", numeric: true }, { key: "removalLines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }]} rows={providerOverview} />
+      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "总线数", numeric: true }, { key: "activeLines", label: "活跃线数", numeric: true }, { key: "removalLines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }]} rows={providerOverview} summary={providerOverviewSummary} />
     </ReportPanel>
     <ReportPanel label="TOP 10 PROVIDERS" title="服务商进单排名" description="按 I 服务编号汇总当前筛选记录，排名依据月平均计量。">
-      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(false)} />
+      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(serviceData)} summary={rankingSummary(serviceData)} />
     </ReportPanel>
     <ReportPanel label="TOP 10 REMOVALS" title="服务商拆机排名" description="仅统计统一业务判定为拆机的记录；明确的拆机、退订或注销不会被新增量兜底覆盖。">
-      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(true)} />
+      <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(removalData)} summary={rankingSummary(removalData)} />
     </ReportPanel>
     <ReportPanel wide label="II SERVICE PROVIDERS" title="II服务商进单排名" status="partial" description="按II服务编号汇总；II服务编号为空的记录不纳入排名，也不会用供应商名称代替。">
-      <ReportTable columns={[{ key: "code", label: "II 服务编号" }, { key: "name", label: "II 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={buildPerformance(rows, "service2").slice(0, 10).map((item) => ({ key: item.key, code: item.label, name: item.secondary || "--", lines: number(item.lines), amount: money(item.amount), share: percent(item.share), rank: item.rank }))} emptyText="当前筛选记录没有II服务编号" />
+      <ReportTable columns={[{ key: "code", label: "II 服务编号" }, { key: "name", label: "II 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(serviceIIData)} summary={rankingSummary(serviceIIData)} emptyText="当前筛选记录没有II服务编号" />
     </ReportPanel>
     <ReportPanel wide label="PROVIDER CATEGORY" title="年拆机服务商分类占比" status="partial" description="服务分类当前可能因脱敏而全部为空；系统不会自动补齐。">
-      <ReportTable columns={[{ key: "category", label: "I 服务分类" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "note", label: "备注" }]} rows={categoryRows} emptyText="服务分类为空或当前筛选无记录" />
+      <ReportTable columns={[{ key: "category", label: "I 服务分类" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "note", label: "备注" }]} rows={categoryRows} summary={categorySummary} emptyText="服务分类为空或当前筛选无记录" />
+    </ReportPanel>
+  </section>;
+}
+
+export function SupplierReportTables({ rows }: { rows: BusinessRow[] }) {
+  const data = buildPerformance(rows, "provider");
+  const performance = data.map((item) => ({
+    key: item.key,
+    supplier: item.label,
+    lines: number(item.lines),
+    amount: money(item.amount),
+    average: money(item.average),
+    share: percent(item.share),
+    rank: item.rank,
+  }));
+  const lines = data.reduce((sum, item) => sum + item.lines, 0);
+  const amount = knownSum(data.map((item) => item.amount));
+  const summary = { key: "summary", supplier: "总计 / 总览", lines: number(lines), amount: money(amount), average: money(amount === null ? null : amount / Math.max(lines, 1)), share: data.length ? "100.0%" : "--", rank: "--" };
+  return <section className="module-grid report-module-grid">
+    <ReportPanel wide label="SUPPLIER ANALYSIS" title="供应商综合分析" description="严格按源表供应商字段汇总；供应商与服务编号口径分开，不互相替代。">
+      <ReportTable columns={[{ key: "supplier", label: "供应商" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "average", label: "平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={performance} summary={summary} />
     </ReportPanel>
   </section>;
 }

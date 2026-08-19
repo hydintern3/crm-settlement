@@ -42,6 +42,11 @@ function aggregate(rows: BusinessRow[], measure: ChartMeasure): NumericValue {
   return null;
 }
 
+function displayAggregate(rows: BusinessRow[], measure: ChartMeasure): NumericValue {
+  const value = aggregate(rows, measure);
+  return value !== null && measureDefinition(measure.field).unit === "万元" ? value / 10_000 : value;
+}
+
 function groupRows(rows: BusinessRow[], template: ChartTemplateDraft, retained: Set<string> | null, mergeOthers = false) {
   const groups = new Map<string, BusinessRow[]>();
   for (const row of rows) {
@@ -91,8 +96,8 @@ export function buildChartData(rows: BusinessRow[], template: ChartTemplateDraft
   const seriesCategories = template.seriesField ? [...new Set([...groups.keys()].map((key) => key.split("\u0000")[1]))].sort((left, right) => left.localeCompare(right, "zh-CN")).slice(0, 12) : [];
   if (template.seriesField && new Set([...groups.keys()].map((key) => key.split("\u0000")[1])).size > 12) warnings.push("系列超过 12 项，仅展示前 12 项");
   const series: ChartSeriesData[] = template.seriesField
-    ? seriesCategories.map((seriesName) => ({ name: seriesName, values: categories.map((category) => aggregate(groups.get(`${category}\u0000${seriesName}`) ?? [], template.measures[0])) }))
-    : template.measures.map((measure) => ({ name: measureTitle(measure), values: categories.map((category) => aggregate(groups.get(`${category}\u0000`) ?? [], measure)) }));
+    ? seriesCategories.map((seriesName) => ({ name: seriesName, values: categories.map((category) => displayAggregate(groups.get(`${category}\u0000${seriesName}`) ?? [], template.measures[0])) }))
+    : template.measures.map((measure) => ({ name: measureTitle(measure), values: categories.map((category) => displayAggregate(groups.get(`${category}\u0000`) ?? [], measure)) }));
   const unit = measureDefinition(template.measures[0].field).unit;
   return { categories, series, recordCount: rows.length, groupCount: groups.size, unit, warnings };
 }
