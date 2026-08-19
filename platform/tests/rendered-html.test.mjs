@@ -18,13 +18,14 @@ test("keeps local data private and does not fall back to mock records", async ()
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("app/components/AnalyticsCharts.tsx", root), "utf8"),
   ]);
-  const [reportTablesSource, chartTemplateSource, chartBuilderSource, dashboardStoreSource, nextConfigSource, nginxConfigSource] = await Promise.all([
+  const [reportTablesSource, chartTemplateSource, chartBuilderSource, dashboardStoreSource, nextConfigSource, nginxConfigSource, offlineDeploySource] = await Promise.all([
     readFile(new URL("app/components/ReportTables.tsx", root), "utf8"),
     readFile(new URL("app/lib/chart-template.ts", root), "utf8"),
     readFile(new URL("app/components/ChartBuilder.tsx", root), "utf8"),
     readFile(new URL("app/lib/server/dashboard-store.ts", root), "utf8"),
     readFile(new URL("next.config.ts", root), "utf8"),
     readFile(new URL("../deploy/nginx/crm-location.conf", root), "utf8"),
+    readFile(new URL("../deploy/offline-deploy.sh", root), "utf8"),
   ]);
 
   assert.match(gitignore, /public\/data\/local-snapshot\.json/);
@@ -101,6 +102,12 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(dashboardStoreSource, /rename\(temporary/);
   assert.match(nextConfigSource, /bodySizeLimit: "110mb"/);
   assert.match(nginxConfigSource, /client_max_body_size 110m/);
+  assert.match(offlineDeploySource, /sha256sum -c/);
+  assert.match(offlineDeploySource, /docker load -i/);
+  assert.match(offlineDeploySource, /readonly IMAGE="ghcr\.io\/hydintern3\/crm-settlement:latest"/);
+  assert.match(offlineDeploySource, /grep -qxF "CRM_IMAGE=\$\{IMAGE\}"/);
+  assert.match(offlineDeploySource, /--pull never --force-recreate/);
+  assert.doesNotMatch(offlineDeploySource, /compose down -v|docker volume rm|docker system prune/);
   assert.match(sanitizeScript, /local-snapshot\.json/);
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);

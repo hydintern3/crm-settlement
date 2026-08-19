@@ -110,6 +110,33 @@ cd /opt/crm-settlement
 sudo docker compose pull crm-platform
 ```
 
+### 无法访问 GHCR：SCP 后一键离线更新（推荐）
+
+离线镜像包固定使用 `latest`。仓库提供的脚本会自动校验压缩包、加载镜像、把 `.env` 中旧的提交 SHA 标签纠正为 `latest`、重建容器并等待健康检查；它不会拉取 GHCR，也不会删除或重建数据卷。
+
+在 Windows 开发机上传镜像和校验文件：
+
+```powershell
+scp crm-settlement-linux-amd64.tar.gz `
+  crm-settlement-linux-amd64.tar.gz.sha256 `
+  dev03@<服务器IP>:/home/dev03/
+```
+
+然后在服务器执行一条命令：
+
+```bash
+sudo bash /opt/crm-settlement/deploy/offline-deploy.sh \
+  /home/dev03/crm-settlement-linux-amd64.tar.gz
+```
+
+如果压缩包一直保存在默认位置 `/home/dev03/crm-settlement-linux-amd64.tar.gz`，路径也可以省略：
+
+```bash
+sudo bash /opt/crm-settlement/deploy/offline-deploy.sh
+```
+
+第一次运行时脚本可能显示“将 Compose 镜像固定为 latest”；以后不会再修改 `.env`，也不需要执行 `docker tag`。脚本只更新 `CRM_IMAGE` 这一项，管理员账号、密码摘要、会话密钥和其他配置保持不变。
+
 如果返回 `denied` 或 `unauthorized`，说明 GHCR 包仍为私有。安全登录：
 
 ```bash
@@ -277,3 +304,5 @@ sudo docker compose down
 上述操作不会停止 content-pipeline。
 
 应用镜像回滚与业务数据回滚相互独立：镜像使用提交 SHA 回滚；业务数据在管理员“数据中心”重新激活历史版本。`docker compose down` 不删除数据卷，禁止在未备份时使用 `docker compose down -v`。
+
+离线环境需要回滚时，不要直接运行上述联网拉取命令。应加载对应历史镜像包并确保它带有 `.env` 指定的标签；恢复到日常更新后，再执行一键离线脚本把镜像配置切回 `latest`。
