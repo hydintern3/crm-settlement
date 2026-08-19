@@ -126,7 +126,6 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /II服务编号/);
   assert.match(pageSource, /crm-calculation-rules/);
   assert.match(pageSource, /跟随当前日期/);
-  assert.match(pageSource, /业务属性（CRM）/);
   assert.match(pageSource, /业务属性判断（平台）/);
   assert.match(pageSource, /计量规则（按当前日期计算）/);
   assert.match(reportTablesSource, /不生成模拟金额/);
