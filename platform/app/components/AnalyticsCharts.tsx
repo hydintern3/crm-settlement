@@ -9,7 +9,7 @@ import { SVGRenderer } from "echarts/renderers";
 import type { RankedItem, Snapshot } from "../lib/data-model";
 import type { AggregatedChartData } from "../lib/chart-aggregation";
 import type { ChartTemplateDraft } from "../lib/chart-template";
-import { formatChartNumber, yuanToWan } from "../lib/formatting";
+import { formatChartNumber } from "../lib/formatting";
 
 echarts.use([BarChart, LineChart, PieChart, ScatterChart, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent, SVGRenderer]);
 
@@ -90,17 +90,16 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
 
 export function MonthlyChart({ data }: { data: Snapshot["monthly"] }) {
   if (!data.length || data.every((item) => item.amount === null)) return <EmptyChart />;
-  const amounts = data.map((item) => yuanToWan(item.amount));
   const option: EChartsCoreOption = {
     animationDuration: 500,
     color: ["#2764e7", "#cb5a69"],
     textStyle: { fontFamily: CHART_FONT, fontSize: 12, color: "#526176" },
     grid: { left: 48, right: 18, top: 34, bottom: 42 },
-    tooltip: { trigger: "axis", textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, valueFormatter: (value: unknown) => formatValue(value, "万元") },
+    tooltip: { trigger: "axis", textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, formatter: (params: unknown) => (Array.isArray(params) ? params.map((item) => { const point = item as { seriesName?: string; value?: unknown; axisValue?: string }; const unit = point.seriesName === "线路数" ? "线" : "元"; return `${point.seriesName ?? "--"}: ${formatValue(point.value, unit)}`; }).join("<br/>") : "--") },
     xAxis: { type: "category", data: data.map((item) => item.month.includes("-") ? item.month : `${item.month}月`), axisLine: { lineStyle: { color: "#dfe5ed" } }, axisTick: { show: false }, axisLabel: { ...axisText, rotate: data.length > 8 ? 30 : 0 } },
-    yAxis: { type: "value", name: "万元", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
+    yAxis: [{ type: "value", name: "元", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText }, { type: "value", name: "线路数", splitLine: { show: false }, axisLabel: axisText }],
     dataZoom: data.length > 8 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
-    series: [{ name: "月平均计量", type: "bar", barMaxWidth: 24, label: { show: true, position: "top", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "万元") }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: amounts }],
+    series: [{ name: "月平均计量", type: "bar", barMaxWidth: 18, yAxisIndex: 0, label: { show: true, position: "top", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: data.map((item) => item.amount) }, { name: "月平均资费", type: "line", yAxisIndex: 0, smooth: true, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, data: data.map((item) => item.tariff) }, { name: "线路数", type: "line", yAxisIndex: 1, smooth: true, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "线") }, data: data.map((item) => item.lines) }],
   };
   return <Chart option={option} />;
 }
@@ -125,10 +124,10 @@ export function RankingChart({ items, onSelect }: { items: RankedItem[]; onSelec
     color: ["#183b68"],
     textStyle: { fontFamily: CHART_FONT, fontSize: 12, color: "#526176" },
     grid: { left: 82, right: 28, top: 15, bottom: 25 },
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, valueFormatter: (value: unknown) => formatValue(value, "万元") },
-    xAxis: { type: "value", name: "万元", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, valueFormatter: (value: unknown) => formatValue(value, "元") },
+    xAxis: { type: "value", name: "元", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
     yAxis: { type: "category", data: data.map((item) => item.label), axisTick: { show: false }, axisLine: { show: false }, axisLabel: { ...axisText, width: 76, overflow: "truncate" } },
-    series: [{ type: "bar", barWidth: 12, label: { show: true, position: "right", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "万元") }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [0, 5, 5, 0] }, data: data.map((item) => yuanToWan(item.amount)) }],
+    series: [{ type: "bar", barWidth: 12, label: { show: true, position: "right", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [0, 5, 5, 0] }, data: data.map((item) => item.amount) }],
   };
   return <Chart option={option} onSelect={onSelect} height={300} />;
 }

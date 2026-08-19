@@ -44,7 +44,7 @@ function aggregate(rows: BusinessRow[], measure: ChartMeasure): NumericValue {
 
 function displayAggregate(rows: BusinessRow[], measure: ChartMeasure): NumericValue {
   const value = aggregate(rows, measure);
-  return value !== null && measureDefinition(measure.field).unit === "万元" ? value / 10_000 : value;
+  return value;
 }
 
 function groupRows(rows: BusinessRow[], template: ChartTemplateDraft, retained: Set<string> | null, mergeOthers = false) {

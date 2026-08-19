@@ -20,11 +20,11 @@ test("chart aggregation handles date buckets, nulls and real zero", () => {
   draft.options.sort = "dimensionAsc";
   const data = buildChartData(rows, draft);
   assert.deepEqual(data.categories, ["2026-01", "2026-02"]);
-  assert.deepEqual(data.series[0].values, [0.015, 0]);
-  assert.equal(data.unit, "万元");
+  assert.deepEqual(data.series[0].values, [150, 0]);
+  assert.equal(data.unit, "元");
   assert.equal(data.recordCount, 4);
-  assert.equal(formatWan(123.456789), "0.012346");
-  assert.equal(formatWan(0), "0.000000");
+  assert.equal(formatWan(123.456789), "123.46");
+  assert.equal(formatWan(0), "0");
   assert.equal(formatWan(null), "--");
 });
 

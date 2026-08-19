@@ -36,7 +36,7 @@ async function readDashboard(): Promise<DashboardFile> {
       const sourceSchemaVersion = Number(template.schemaVersion ?? parsed.schemaVersion ?? 1);
       const migrated = migrateChartDraft(parseChartDraft(template), sourceSchemaVersion);
       const corrected = template.id === "system-provider-ranking" && sourceSchemaVersion < 3
-        ? { ...migrated, title: "供应商进单", description: "按供应商汇总月平均计量 Top 50", dimension: { field: "provider" as const } }
+        ? { ...migrated, title: "供应商分布", description: "按供应商汇总线路数与月平均计量 Top 50", dimension: { field: "provider" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }] }
         : migrated;
       return {
         ...template,

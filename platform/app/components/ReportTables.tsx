@@ -3,13 +3,17 @@
 import { useState, type ReactNode } from "react";
 import {
   buildBusinessProgress,
+  buildDoubleLineAssessment,
   buildCompletionCohorts,
   buildDataQualityMetrics,
   buildMonthlyBusiness,
   buildNetGrowth,
   buildPerformance,
+  buildServiceCombinationRows,
+  buildServicePolicyDistribution,
   isActive,
   isRemoval,
+  isSettlementReviewCandidate,
   type BusinessRow,
   type CalculationRuleConfig,
   type NumericValue,
@@ -22,7 +26,7 @@ type TableRow = Record<string, CellValue>;
 type Column = { key: string; label: string; numeric?: boolean };
 
 const number = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
-const money = (value: NumericValue) => value === null ? "--" : `${formatWan(value)} 万元`;
+const money = (value: NumericValue) => value === null ? "--" : `${formatWan(value)} 元`;
 const percent = (value: NumericValue) => value === null ? "--" : `${number(value, 1)}%`;
 const knownSum = (values: NumericValue[]): NumericValue => {
   const known = values.filter((value): value is number => value !== null);
@@ -63,6 +67,40 @@ export function BusinessProgressTables({ rows, rules }: { rows: BusinessRow[]; r
     <ReportTable columns={[{ key: "label", label: "分析对象" }, { key: "total", label: "总线路数", numeric: true }, { key: "amount", label: "总月平均计量", numeric: true }, { key: "installs", label: "新增线路数", numeric: true }, { key: "installAmount", label: "新增月平均计量", numeric: true }, { key: "removals", label: "拆机线路数", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "netGrowth", label: "净增长线路数", numeric: true }, { key: "netAmount", label: "净增长月平均计量", numeric: true }, { key: "netTariff", label: "净增月平均资费", numeric: true }, { key: "newMargin", label: "新增毛利", numeric: true }, { key: "stockMargin", label: "存量毛利", numeric: true }]} rows={progressRows} summary={summary} emptyText={dimension === "service2" ? "当前筛选记录没有II服务编号" : "暂无匹配数据"} />
     {progressRows.every((row) => row.newMargin === "--" && row.stockMargin === "--") && <div className="availability-note"><strong>毛利暂未启用</strong><span>需补充运营有效金额、结算有效金额及新增/存量毛利规则。</span></div>}
   </ReportPanel></section>;
+}
+
+export function NetGrowthOverview({ rows }: { rows: BusinessRow[] }) {
+  const installs = rows.filter((row) => row.businessEvent === "新装");
+  const removals = rows.filter((row) => row.businessEvent === "拆机");
+  const sum = (values: NumericValue[]) => knownSum(values);
+  const installLines = installs.reduce((total, row) => total + (row.lines ?? 1), 0);
+  const removalLines = removals.reduce((total, row) => total + (row.lines ?? 1), 0);
+  const installAmount = sum(installs.map((row) => row.monthlyMetering));
+  const removalAmount = sum(removals.map((row) => row.monthlyMetering));
+  const netAmount = installAmount !== null && removalAmount !== null ? installAmount - removalAmount : null;
+  return <ReportPanel wide label="NET GROWTH OVERVIEW" title="净增长分析" description="按当前筛选结果汇总新增与拆机线路、月平均计量及净增长月平均计量。">
+    <ReportTable columns={[{ key: "installs", label: "新增线路", numeric: true }, { key: "installAmount", label: "新增月平均计量", numeric: true }, { key: "removals", label: "拆机线路", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "netAmount", label: "净增长月平均计量", numeric: true }]} rows={[{ key: "overview", installs: number(installLines), installAmount: money(installAmount), removals: number(removalLines), removalAmount: money(removalAmount), netAmount: money(netAmount) }]} />
+  </ReportPanel>;
+}
+
+export function DoubleLineOverview({ rows }: { rows: BusinessRow[] }) {
+  const [target, setTarget] = useState("0.75");
+  const targetValue = target === "custom" ? 0.75 : Number(target);
+  const assessment = buildDoubleLineAssessment(rows, targetValue);
+  const [customTarget, setCustomTarget] = useState("75");
+  const actualTarget = target === "custom" ? Math.max(0.01, Number(customTarget) / 100 || 0.75) : targetValue;
+  const result = target === "custom" ? buildDoubleLineAssessment(rows, actualTarget) : assessment;
+  const formatRatio = (value: NumericValue) => value === null ? "--" : `${number(value, 1)}%`;
+  const rowsToDisplay = [{
+    key: "assessment",
+    installLines: number(result.installLines), installConvertedLines: number(result.installConvertedLines), installTotalLines: number(result.installTotalLines),
+    removalLines: number(result.removalLines), removalConvertedLines: number(result.removalConvertedLines), removalTotalLines: number(result.removalTotalLines),
+    rawRatio: formatRatio(result.rawRatio), convertedRatio: formatRatio(result.convertedRatio), rawPendingLines: number(result.rawPendingLines), convertedPendingLines: number(result.convertedPendingLines),
+  }];
+  return <ReportPanel wide label="DOUBLE-LINE ASSESSMENT" title="双线拆装比" description="折算规则：月平均资费低于10,000元不折算；10,000元起每满2,000元计1线，最高20线；新增和拆机使用同一口径。">
+    <div className="dimension-tabs" role="group" aria-label="拆装比考核档位"><span className="section-label">考核目标</span><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="0.68">68%</option><option value="0.75">75%</option><option value="custom">自定义</option></select>{target === "custom" && <label><span className="sr-only">自定义拆装比</span><input type="number" min="1" max="200" step="0.1" value={customTarget} onChange={(event) => setCustomTarget(event.target.value)} />%</label>}</div>
+    <ReportTable columns={[{ key: "installLines", label: "新增线路数", numeric: true }, { key: "installConvertedLines", label: "新增折算线路数", numeric: true }, { key: "installTotalLines", label: "合计新增线路数", numeric: true }, { key: "removalLines", label: "拆机线路数", numeric: true }, { key: "removalConvertedLines", label: "拆机折算线路数", numeric: true }, { key: "removalTotalLines", label: "合计拆机线路数", numeric: true }, { key: "rawRatio", label: "原始拆装比", numeric: true }, { key: "convertedRatio", label: "折算拆装比", numeric: true }, { key: "rawPendingLines", label: "原始待补线路数", numeric: true }, { key: "convertedPendingLines", label: "折算后待补线路数", numeric: true }]} rows={rowsToDisplay} />
+  </ReportPanel>;
 }
 
 function ReportTable({ columns, rows, summary, emptyText = "暂无匹配数据" }: { columns: Column[]; rows: TableRow[]; summary?: TableRow; emptyText?: string }) {
@@ -123,7 +161,7 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
     activeRate: percent(cohortLines ? cohortActive / cohortLines * 100 : null), amount: money(knownSum(cohortData.map((item) => item.monthlyMetering))), activeAmount: money(knownSum(cohortData.map((item) => item.activeMonthlyMetering))),
   };
   return <section className="module-grid report-module-grid">
-    <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description="完工年月来自当前筛选记录；目标与历史时点活跃口径尚未提供，保持 --。">
+    <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description="按源表完工日期分月；新装和当年拆机均要求业务属性与完工日期属于对应月份/年度。目标与历史时点活跃口径尚未提供，保持 --。">
       <ReportTable columns={[
         { key: "month", label: "月份" }, { key: "installs", label: "新装线数", numeric: true }, { key: "installAmount", label: "新装月平均计量", numeric: true },
         { key: "removals", label: "当年拆机线数", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "activeLines", label: "当前活跃线数", numeric: true },
@@ -213,6 +251,23 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
   const categorizedRows = rows.filter((row) => row.providerCategory);
   const categorizedRemovals = categorizedRows.filter(isRemoval);
   const categorySummary = { key: "summary", category: "总计 / 总览", lines: number(categorizedRows.length), amount: money(knownSum(categorizedRows.map((row) => row.monthlyMetering))), removalRate: percent(categorizedRows.length ? categorizedRemovals.length / categorizedRows.length * 100 : null), note: "仅汇总有服务分类的记录" };
+  const combinations = buildServiceCombinationRows(rows).map((item) => ({
+    key: item.key, serviceCode: item.serviceCode, serviceName: item.serviceName, serviceCodeII: item.serviceCodeII, serviceNameII: item.serviceNameII,
+    records: number(item.records), lines: number(item.lines), newVolumeRecords: number(item.newVolumeRecords), newVolumeAmount: money(item.newVolumeAmount), stockRecords: number(item.stockRecords), stockAmount: money(item.stockAmount), monthlyMetering: money(item.monthlyMetering),
+  }));
+  const policyDistribution = buildServicePolicyDistribution(rows).map((item) => ({
+    key: item.key, policy: item.policy, belowAuthorizedPrice: item.belowAuthorizedPrice,
+    serviceOneRecords: number(item.serviceOneRecords), serviceTwoRecords: number(item.serviceTwoRecords), totalServiceRecords: number(item.totalServiceRecords),
+    serviceOneLines: number(item.serviceOneLines), serviceTwoLines: number(item.serviceTwoLines), totalServiceLines: number(item.totalServiceLines),
+    serviceOneAmount: money(item.serviceOneAmount), serviceTwoAmount: money(item.serviceTwoAmount), totalServiceAmount: money(item.totalServiceAmount),
+  }));
+  const policySummaryRaw = buildServicePolicyDistribution(rows);
+  const policySummary = policySummaryRaw.length ? {
+    key: "summary", policy: "总计 / 总览", belowAuthorizedPrice: "--",
+    serviceOneRecords: number(policySummaryRaw.reduce((sum, item) => sum + item.serviceOneRecords, 0)), serviceTwoRecords: number(policySummaryRaw.reduce((sum, item) => sum + item.serviceTwoRecords, 0)), totalServiceRecords: number(policySummaryRaw.reduce((sum, item) => sum + item.totalServiceRecords, 0)),
+    serviceOneLines: number(policySummaryRaw.reduce((sum, item) => sum + item.serviceOneLines, 0)), serviceTwoLines: number(policySummaryRaw.reduce((sum, item) => sum + item.serviceTwoLines, 0)), totalServiceLines: number(policySummaryRaw.reduce((sum, item) => sum + item.totalServiceLines, 0)),
+    serviceOneAmount: money(knownSum(policySummaryRaw.map((item) => item.serviceOneAmount))), serviceTwoAmount: money(knownSum(policySummaryRaw.map((item) => item.serviceTwoAmount))), totalServiceAmount: money(knownSum(policySummaryRaw.map((item) => item.totalServiceAmount))),
+  } : undefined;
   return <section className="module-grid report-module-grid">
     <ReportPanel wide label="PROVIDER OVERVIEW" title="服务商综合分布" description="按 I 服务编号汇总进单、当前活跃、拆机、计量与拆机率，便于在同一张表比较规模和留存。">
       <ReportTable columns={[{ key: "code", label: "I 服务编号" }, { key: "name", label: "I 服务简称" }, { key: "lines", label: "总线数", numeric: true }, { key: "activeLines", label: "活跃线数", numeric: true }, { key: "removalLines", label: "拆机线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }]} rows={providerOverview} summary={providerOverviewSummary} />
@@ -225,6 +280,12 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     </ReportPanel>
     <ReportPanel wide label="II SERVICE PROVIDERS" title="II服务商进单排名" status="partial" description="按II服务编号汇总；II服务编号为空的记录不纳入排名，也不会用供应商名称代替。">
       <ReportTable columns={[{ key: "code", label: "II 服务编号" }, { key: "name", label: "II 服务简称" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "月平均计量", numeric: true }, { key: "share", label: "占比", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={toRows(serviceIIData)} summary={rankingSummary(serviceIIData)} emptyText="当前筛选记录没有II服务编号" />
+    </ReportPanel>
+    <ReportPanel wide label="I + II SERVICE COMBINATION" title="I / II 服务组合分析" status="partial" description="按同一 CRM 记录的 I、II 服务组合汇总。新量、存量采用计量规则（按当前日期计算）；缺少任一服务编号的记录仍保留，不用供应商名称替代。">
+      <ReportTable columns={[{ key: "serviceCode", label: "I 服务编号" }, { key: "serviceName", label: "I 服务简称" }, { key: "serviceCodeII", label: "II 服务编号" }, { key: "serviceNameII", label: "II 服务简称" }, { key: "records", label: "业务记录", numeric: true }, { key: "lines", label: "线数", numeric: true }, { key: "newVolumeRecords", label: "新量记录", numeric: true }, { key: "newVolumeAmount", label: "新量月平均计量", numeric: true }, { key: "stockRecords", label: "存量记录", numeric: true }, { key: "stockAmount", label: "存量月平均计量", numeric: true }, { key: "monthlyMetering", label: "合计月平均计量", numeric: true }]} rows={combinations} emptyText="当前筛选记录没有 I 或 II 服务编号" />
+    </ReportPanel>
+    <ReportPanel wide label="SERVICE POLICY DISTRIBUTION" title="服务商新量、存量政策分布" status="partial" description="按服务侧统计：同一记录同时有 I、II 服务时分别计入 I 服务和 II 服务，合计即 I 服务 + II 服务。因此合计服务项可能大于业务记录数；可通过“是否低于授权价”筛选联动分析。">
+      <ReportTable columns={[{ key: "policy", label: "计量规则（按当前日期计算）" }, { key: "belowAuthorizedPrice", label: "是否低于授权价" }, { key: "serviceOneRecords", label: "I服务记录", numeric: true }, { key: "serviceTwoRecords", label: "II服务记录", numeric: true }, { key: "totalServiceRecords", label: "合计服务记录", numeric: true }, { key: "serviceOneLines", label: "I服务线数", numeric: true }, { key: "serviceTwoLines", label: "II服务线数", numeric: true }, { key: "totalServiceLines", label: "合计服务线数", numeric: true }, { key: "serviceOneAmount", label: "I服务月平均计量", numeric: true }, { key: "serviceTwoAmount", label: "II服务月平均计量", numeric: true }, { key: "totalServiceAmount", label: "合计服务月平均计量", numeric: true }]} rows={policyDistribution} summary={policySummary} emptyText="当前筛选没有新量或存量服务记录" />
     </ReportPanel>
     <ReportPanel wide label="PROVIDER CATEGORY" title="年拆机服务商分类占比" status="partial" description="服务分类当前可能因脱敏而全部为空；系统不会自动补齐。">
       <ReportTable columns={[{ key: "category", label: "I 服务分类" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务量", numeric: true }, { key: "removalRate", label: "拆机率", numeric: true }, { key: "note", label: "备注" }]} rows={categoryRows} summary={categorySummary} emptyText="服务分类为空或当前筛选无记录" />
@@ -292,8 +353,59 @@ export function ProfitTargetTables() {
   </section>;
 }
 
-export function SettlementReportTables() {
+export function SettlementReportTables({ rows }: { rows: BusinessRow[] }) {
+  const settlementRows = rows.map((row, index) => ({
+    key: `${row.deviceCode || row.serviceCode}-${index}`,
+    businessCategory: row.businessCategory || "--",
+    businessName: row.businessName || "--",
+    deviceCode: row.deviceCode || "--",
+    owner: row.owner || "--",
+    serviceCode: row.serviceCode || "--",
+    serviceName: row.serviceName || "--",
+    completedDate: row.completedDate || "--",
+    activeStatus: row.activeStatus || "--",
+    calculationStatus: row.calculationStatus || "--",
+    calculationMethod: row.calculationMethod || "--",
+    paymentCycle: row.paymentCycle || "--",
+    meteringRule: row.meteringRule || "--",
+    monthlyTariff: money(row.discountedTariff),
+    monthlyMetering: money(row.monthlyMetering),
+    grossProfit: money(row.grossProfit),
+  }));
+  const candidateGroups = new Map<string, BusinessRow[]>();
+  for (const row of rows) {
+    if (!row.serviceCode) continue;
+    candidateGroups.set(row.serviceCode, [...(candidateGroups.get(row.serviceCode) ?? []), row]);
+  }
+  const candidates = [...candidateGroups.entries()].map(([serviceCode, group]) => {
+    const active = group.filter(isActive);
+    const calculable = group.filter((row) => /计算中|恢复计算/.test(row.calculationStatus));
+    const review = group.filter(isSettlementReviewCandidate);
+    return {
+      key: serviceCode,
+      serviceCode,
+      serviceName: group.find((row) => row.serviceName)?.serviceName || "--",
+      records: number(group.length),
+      activeRecords: number(active.length),
+      calculableRecords: number(calculable.length),
+      reviewRecords: number(review.length),
+      monthlyMeteringValue: knownSum(group.map((row) => row.monthlyMetering)),
+      monthlyMetering: money(knownSum(group.map((row) => row.monthlyMetering))),
+      grossProfit: money(knownSum(group.map((row) => row.grossProfit))),
+    };
+  }).sort((left, right) => (right.monthlyMeteringValue ?? Number.NEGATIVE_INFINITY) - (left.monthlyMeteringValue ?? Number.NEGATIVE_INFINITY));
+  const candidateSummary = {
+    key: "summary", serviceCode: "总计 / 总览", serviceName: "--", records: number(rows.length), activeRecords: number(rows.filter(isActive).length),
+    calculableRecords: number(rows.filter((row) => /计算中|恢复计算/.test(row.calculationStatus)).length), reviewRecords: number(rows.filter(isSettlementReviewCandidate).length),
+    monthlyMetering: money(knownSum(rows.map((row) => row.monthlyMetering))), grossProfit: money(knownSum(rows.map((row) => row.grossProfit))),
+  };
   return <section className="module-grid report-module-grid">
+    <ReportPanel wide label="CRM SETTLEMENT PREPARATION" title="CRM 结算准备明细" status="partial" description="参照财务“服务结算”和“双线应收”示例，展示 CRM 已有且可复核的业务、服务、状态和计量字段；不模拟运营应收、扣率、税额或实收。">
+      <ReportTable columns={[{ key: "businessCategory", label: "业务类别" }, { key: "businessName", label: "业务名称" }, { key: "deviceCode", label: "设备编号" }, { key: "owner", label: "负责人" }, { key: "serviceCode", label: "I服务编号" }, { key: "serviceName", label: "I服务简称" }, { key: "completedDate", label: "统计完工日期" }, { key: "activeStatus", label: "活跃状态" }, { key: "calculationStatus", label: "计算状态" }, { key: "calculationMethod", label: "计算方式" }, { key: "paymentCycle", label: "付款周期" }, { key: "meteringRule", label: "计量规则" }, { key: "monthlyTariff", label: "月平均资费", numeric: true }, { key: "monthlyMetering", label: "月平均计量", numeric: true }, { key: "grossProfit", label: "业务毛利（CRM）", numeric: true }]} rows={settlementRows} emptyText="当前筛选没有可展示的 CRM 业务记录" />
+    </ReportPanel>
+    <ReportPanel wide label="SERVICE SETTLEMENT CANDIDATES" title="服务商结算候选汇总" status="partial" description="按 I 服务编号汇总当前记录、活跃记录、计算状态、结算待复核和 CRM 计量；用于复核分流，不代表正式结算金额或付款指令。">
+      <ReportTable columns={[{ key: "serviceCode", label: "I服务编号" }, { key: "serviceName", label: "I服务简称" }, { key: "records", label: "业务记录", numeric: true }, { key: "activeRecords", label: "活跃记录", numeric: true }, { key: "calculableRecords", label: "计算中/恢复计算", numeric: true }, { key: "reviewRecords", label: "结算待复核", numeric: true }, { key: "monthlyMetering", label: "月平均计量", numeric: true }, { key: "grossProfit", label: "业务毛利（CRM）", numeric: true }]} rows={candidates} summary={candidateSummary} emptyText="当前筛选记录没有 I 服务编号" />
+    </ReportPanel>
     <ReportPanel wide label="SETTLEMENT BY BUSINESS" title="结算按业务汇总" status="pending" description="运营商业务、其他补充、扣款、审核差异、开票与付款批次。">
       <UnavailableTable columns={["编号", "服务名称", "政企固网", "政企双线", "政企宽带", "T-1 共享表金额", "其他运营合作", "联通", "移动", "信网 BGP", "号百", "其他补充", "其他扣款", "合计", "支付金额", "审核差异", "开票金额", "开票支付差异", "备注", "付款批次"]} missing={["实际账单", "审核结果", "支付记录", "开票记录"]} />
     </ReportPanel>

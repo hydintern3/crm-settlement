@@ -3,6 +3,10 @@ import test from "node:test";
 
 import {
   applyDynamicCalculationRules,
+  buildDoubleLineAssessment,
+  buildMonthlyBusiness,
+  buildServiceCombinationRows,
+  buildServicePolicyDistribution,
   buildSettlementReviewSummary,
   buildSnapshot,
   classifyBusinessEvent,
@@ -45,6 +49,52 @@ test("field mapping preserves source values and audit fields", () => {
   assert.equal(row.removalType, "用户拆机");
   assert.equal(row.userRemovalReason, "经营调整");
   assert.equal(maskContactLandline("1234"), "****");
+});
+
+test("double-line assessment applies threshold, 2,000 yuan increments and 20-line cap consistently", () => {
+  const rows = [
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "9999" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "10000" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "12000" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "14000" }),
+    toBusinessRow({ 业务属性: "拆机", 线数: "2", 优惠资费: "50000" }),
+  ];
+  const result = buildDoubleLineAssessment(rows, 0.75);
+  assert.equal(result.installLines, 4);
+  assert.equal(result.installConvertedLines, 6);
+  assert.equal(result.installTotalLines, 10);
+  assert.equal(result.removalLines, 2);
+  assert.equal(result.removalConvertedLines, 20);
+  assert.equal(result.removalTotalLines, 22);
+  assert.equal(result.rawRatio, 50);
+  assert.equal(result.convertedRatio, 220);
+  assert.equal(result.rawPendingLines, 0);
+  assert.equal(result.convertedPendingLines, 20);
+});
+
+test("service combinations preserve single-sided records and policy distribution counts I and II service sides", () => {
+  const rows = [
+    toBusinessRow({ 设备编号: "D-1", I服务编号: "I-1", II服务编号: "II-1", 计量规则: "新量", 是否低于授权价: "是", 线数: "2", 月平均计量: "100" }),
+    toBusinessRow({ 设备编号: "D-2", I服务编号: "I-1", 计量规则: "存量", 是否低于授权价: "否", 线数: "1", 月平均计量: "50" }),
+    toBusinessRow({ 设备编号: "D-3", II服务编号: "II-2", 计量规则: "新量", 是否低于授权价: "是", 线数: "3", 月平均计量: "70" }),
+  ];
+  const combinations = buildServiceCombinationRows(rows);
+  assert.equal(combinations.length, 3);
+  assert.equal(combinations.find((item) => item.serviceCode === "--" && item.serviceCodeII === "II-2")?.records, 1);
+  assert.equal(combinations.find((item) => item.serviceCode === "I-1" && item.serviceCodeII === "II-1")?.newVolumeAmount, 100);
+  const policies = buildServicePolicyDistribution(rows);
+  const newAndBelow = policies.find((item) => item.policy === "新量" && item.belowAuthorizedPrice === "是");
+  assert.deepEqual(newAndBelow && { first: newAndBelow.serviceOneRecords, second: newAndBelow.serviceTwoRecords, total: newAndBelow.totalServiceRecords, amount: newAndBelow.totalServiceAmount }, { first: 1, second: 2, total: 3, amount: 270 });
+});
+
+test("annual install and removal summary groups by source completion date", () => {
+  const rows = [
+    toBusinessRow({ 设备编号: "D-1", 业务属性: "新装", 初始完工日期: "2025-12-31", 完工日期: "2026-01-03", 月平均计量: "100" }),
+    toBusinessRow({ 设备编号: "D-2", 业务属性: "拆机", 初始完工日期: "2026-02-01", 完工日期: "2026-04-08", 月平均计量: "20" }),
+    toBusinessRow({ 设备编号: "D-3", 业务属性: "拆机", 初始完工日期: "2026-05-01", 完工日期: "2025-05-01", 月平均计量: "30" }),
+  ];
+  const monthly = buildMonthlyBusiness(rows);
+  assert.deepEqual(monthly.map((item) => [item.month, item.installs, item.removals]), [["2026-01", 1, 0], ["2026-04", 0, 1]]);
 });
 
 test("partial CRM rows remain available while settlement review reasons stay explicit", () => {

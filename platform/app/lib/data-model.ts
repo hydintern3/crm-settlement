@@ -2,6 +2,7 @@ export type NumericValue = number | null;
 
 export type BusinessRow = {
   businessType: string;
+  businessCategory: string;
   businessEvent: "新装" | "拆机" | "变更" | "待确认";
   businessEventSource: "业务属性" | "计量规则兜底" | "待确认";
   businessName: string;
@@ -29,6 +30,7 @@ export type BusinessRow = {
   providerCategory: string;
   contactLandlineMasked: string;
   calculationStatus: string;
+  calculationMethod: string;
   installmentCalculationFlag: string;
   removalType: string;
   userRemovalReason: string;
@@ -74,6 +76,36 @@ export type PerformanceRow = {
   rank: number;
 };
 
+export type ServiceCombinationRow = {
+  key: string;
+  serviceCode: string;
+  serviceName: string;
+  serviceCodeII: string;
+  serviceNameII: string;
+  records: number;
+  lines: number;
+  newVolumeRecords: number;
+  newVolumeAmount: NumericValue;
+  stockRecords: number;
+  stockAmount: NumericValue;
+  monthlyMetering: NumericValue;
+};
+
+export type ServicePolicyDistributionRow = {
+  key: string;
+  policy: string;
+  belowAuthorizedPrice: string;
+  serviceOneRecords: number;
+  serviceTwoRecords: number;
+  totalServiceRecords: number;
+  serviceOneLines: number;
+  serviceTwoLines: number;
+  totalServiceLines: number;
+  serviceOneAmount: NumericValue;
+  serviceTwoAmount: NumericValue;
+  totalServiceAmount: NumericValue;
+};
+
 export type MonthlyBusinessRow = {
   month: string;
   installs: number;
@@ -94,6 +126,20 @@ export type NetGrowthRow = {
   netLines: number;
   netAmount: NumericValue;
   installRemovalRatio: NumericValue;
+};
+
+export type DoubleLineAssessment = {
+  target: number;
+  installLines: number;
+  installConvertedLines: number;
+  installTotalLines: number;
+  removalLines: number;
+  removalConvertedLines: number;
+  removalTotalLines: number;
+  rawRatio: NumericValue;
+  convertedRatio: NumericValue;
+  rawPendingLines: number;
+  convertedPendingLines: number;
 };
 
 export type CompletionCohortRow = {
@@ -154,9 +200,10 @@ export type Snapshot = {
     installs: NumericValue;
     removals: NumericValue;
     monthlyMetering: NumericValue;
+    discountedTariff: NumericValue;
     review: NumericValue;
   };
-  monthly: Array<{ month: string; installs: number; removals: number; amount: NumericValue }>;
+  monthly: Array<{ month: string; installs: number; removals: number; lines: number; amount: NumericValue; tariff: NumericValue }>;
   meteringRules: Array<{ label: string; value: number; color: string }>;
   owners: RankedItem[];
   suppliers: RankedItem[];
@@ -178,7 +225,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   mode: "empty",
   generatedAt: new Date(0).toISOString(),
   source: { label: "尚未导入数据", files: [], currentFile: "--", sheets: [] },
-  summary: { total: null, active: null, installs: null, removals: null, monthlyMetering: null, review: null },
+  summary: { total: null, active: null, installs: null, removals: null, monthlyMetering: null, discountedTariff: null, review: null },
   monthly: [],
   meteringRules: [],
   owners: [],
@@ -247,6 +294,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
   const businessEvent = classifyBusinessEvent(businessType, sourceMeteringRule);
   return {
     businessType,
+    businessCategory: textValue(first(row, ["业务类别", "业务 分类"])),
     ...businessEvent,
     businessName: textValue(first(row, ["业务名称", "产品名称"])),
     owner: textValue(first(row, ["负责人", "销售负责人", "客户经理"])),
@@ -273,6 +321,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     providerCategory: textValue(first(row, ["I 服务分类", "I服务分类", "服务分类"])),
     contactLandlineMasked: maskContactLandline(first(row, ["联系人固话", "联系人 固话", "联系人电话", "联系人 电话"])),
     calculationStatus: textValue(first(row, ["计算状态", "计算 状态"])),
+    calculationMethod: textValue(first(row, ["计算方式", "计算 方法", "计算方式名称"])),
     installmentCalculationFlag: textValue(first(row, ["分期计算标识", "分期 计算标识", "分期计算 标识"])),
     removalType: textValue(first(row, ["拆机类型", "拆机 类型"])),
     userRemovalReason: textValue(first(row, ["用户拆机原因", "用户 拆机原因", "用户拆机 原因"])),
@@ -326,12 +375,76 @@ export function isActive(row: BusinessRow) {
   return row.activeStatus === "活跃" || row.activeStatus === "正常";
 }
 
+export function isSettlementReviewCandidate(row: BusinessRow) {
+  return !row.meteringRule || row.monthlyMetering === null || /年付|两年付/.test(`${row.paymentCycle} ${row.installmentCalculationFlag}`);
+}
+
 export function buildSettlementReviewSummary(rows: BusinessRow[]) {
   const missingMeteringRule = rows.filter((row) => !row.meteringRule).length;
   const missingMonthlyMetering = rows.filter((row) => row.monthlyMetering === null).length;
-  const annualPlan = rows.filter((row) => /年付|两年付/.test(row.businessName)).length;
-  const total = rows.filter((row) => !row.meteringRule || row.monthlyMetering === null || /年付|两年付/.test(row.businessName)).length;
+  const annualPlan = rows.filter((row) => /年付|两年付/.test(`${row.paymentCycle} ${row.installmentCalculationFlag}`)).length;
+  const total = rows.filter(isSettlementReviewCandidate).length;
   return { total, missingMeteringRule, missingMonthlyMetering, annualPlan };
+}
+
+export function buildServiceCombinationRows(rows: BusinessRow[]): ServiceCombinationRow[] {
+  const groups = new Map<string, BusinessRow[]>();
+  for (const row of rows) {
+    if (!row.serviceCode && !row.serviceCodeII) continue;
+    const key = [row.serviceCode || "--", row.serviceName || "--", row.serviceCodeII || "--", row.serviceNameII || "--"].join("\u0001");
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.entries()].map(([key, group]) => {
+    const [serviceCode, serviceName, serviceCodeII, serviceNameII] = key.split("\u0001");
+    const newVolume = group.filter((row) => row.meteringRule === "新量");
+    const stock = group.filter((row) => row.meteringRule === "存量");
+    return {
+      key,
+      serviceCode,
+      serviceName,
+      serviceCodeII,
+      serviceNameII,
+      records: group.length,
+      lines: group.reduce((sum, row) => sum + lineCount(row), 0),
+      newVolumeRecords: newVolume.length,
+      newVolumeAmount: sumKnown(newVolume.map((row) => row.monthlyMetering)),
+      stockRecords: stock.length,
+      stockAmount: sumKnown(stock.map((row) => row.monthlyMetering)),
+      monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
+    };
+  }).sort((left, right) => (right.monthlyMetering ?? Number.NEGATIVE_INFINITY) - (left.monthlyMetering ?? Number.NEGATIVE_INFINITY));
+}
+
+export function buildServicePolicyDistribution(rows: BusinessRow[]): ServicePolicyDistributionRow[] {
+  const groups = new Map<string, { policy: string; belowAuthorizedPrice: string; first: BusinessRow[]; second: BusinessRow[] }>();
+  for (const row of rows) {
+    if (row.meteringRule !== "新量" && row.meteringRule !== "存量") continue;
+    const policy = row.meteringRule;
+    const belowAuthorizedPrice = row.belowAuthorizedPrice || "未采集";
+    const key = `${policy}\u0001${belowAuthorizedPrice}`;
+    const group = groups.get(key) ?? { policy, belowAuthorizedPrice, first: [], second: [] };
+    if (row.serviceCode) group.first.push(row);
+    if (row.serviceCodeII) group.second.push(row);
+    groups.set(key, group);
+  }
+  return [...groups.entries()].map(([key, group]) => {
+    const firstAmount = sumKnown(group.first.map((row) => row.monthlyMetering));
+    const secondAmount = sumKnown(group.second.map((row) => row.monthlyMetering));
+    return {
+      key,
+      policy: group.policy,
+      belowAuthorizedPrice: group.belowAuthorizedPrice,
+      serviceOneRecords: group.first.length,
+      serviceTwoRecords: group.second.length,
+      totalServiceRecords: group.first.length + group.second.length,
+      serviceOneLines: group.first.reduce((sum, row) => sum + lineCount(row), 0),
+      serviceTwoLines: group.second.reduce((sum, row) => sum + lineCount(row), 0),
+      totalServiceLines: group.first.reduce((sum, row) => sum + lineCount(row), 0) + group.second.reduce((sum, row) => sum + lineCount(row), 0),
+      serviceOneAmount: firstAmount,
+      serviceTwoAmount: secondAmount,
+      totalServiceAmount: firstAmount === null && secondAmount === null ? null : (firstAmount ?? 0) + (secondAmount ?? 0),
+    };
+  }).sort((left, right) => left.policy.localeCompare(right.policy, "zh-CN") || left.belowAuthorizedPrice.localeCompare(right.belowAuthorizedPrice, "zh-CN"));
 }
 
 function needsReview(row: BusinessRow) {
@@ -357,6 +470,37 @@ function buildRanking(rows: BusinessRow[], field: "owner" | "provider" | "servic
 
 function lineCount(row: BusinessRow) {
   return row.lines ?? 1;
+}
+
+export function convertedLineCount(row: BusinessRow) {
+  const tariff = row.discountedTariff;
+  if (tariff === null || tariff < 10_000) return 0;
+  return Math.min(20, 1 + Math.floor((tariff - 10_000) / 2_000));
+}
+
+export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75): DoubleLineAssessment {
+  const installs = rows.filter(isInstall);
+  const removals = rows.filter(isRemoval);
+  const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
+  const installConvertedLines = installs.reduce((sum, row) => sum + convertedLineCount(row), 0);
+  const removalLines = removals.reduce((sum, row) => sum + lineCount(row), 0);
+  const removalConvertedLines = removals.reduce((sum, row) => sum + convertedLineCount(row), 0);
+  const installTotalLines = installLines + installConvertedLines;
+  const removalTotalLines = removalLines + removalConvertedLines;
+  const safeTarget = Number.isFinite(target) && target > 0 ? target : 0.75;
+  return {
+    target: safeTarget,
+    installLines,
+    installConvertedLines,
+    installTotalLines,
+    removalLines,
+    removalConvertedLines,
+    removalTotalLines,
+    rawRatio: installLines ? Number((removalLines / installLines * 100).toFixed(6)) : null,
+    convertedRatio: installTotalLines ? Number((removalTotalLines / installTotalLines * 100).toFixed(6)) : null,
+    rawPendingLines: Math.max(0, Math.ceil(removalLines / safeTarget - installLines)),
+    convertedPendingLines: Math.max(0, Math.ceil(removalTotalLines / safeTarget - installTotalLines)),
+  };
 }
 
 export function buildPerformance(
@@ -468,11 +612,12 @@ export function buildBusinessProgress(rows: BusinessRow[], dimension: "company" 
   }).sort((left, right) => right.totalLines - left.totalLines);
 }
 
-export function buildMonthlyBusiness(rows: BusinessRow[]): MonthlyBusinessRow[] {
+export function buildMonthlyBusiness(rows: BusinessRow[], year = String(new Date().getFullYear())): MonthlyBusinessRow[] {
   const groups = new Map<string, BusinessRow[]>();
   for (const row of rows) {
-    const month = row.completedDate.match(/^(\d{4}-\d{2})/)?.[1];
-    if (!month) continue;
+    // 财务年度拆装表按源表“完工日期”归属月份，不使用平台的初始完工日期优先兜底字段。
+    const month = row.rawCompletedDate.match(/^(\d{4}-\d{2})/)?.[1];
+    if (!month || !month.startsWith(`${year}-`)) continue;
     groups.set(month, [...(groups.get(month) ?? []), row]);
   }
   return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, group]) => {
@@ -565,6 +710,7 @@ export function summarizeRows(rows: BusinessRow[]) {
     installs: rows.filter(isInstall).length,
     removals: rows.filter(isRemoval).length,
     monthlyMetering: sumKnown(rows.map((row) => row.monthlyMetering)),
+    discountedTariff: sumKnown(rows.map((row) => row.discountedTariff)),
     review: rows.filter(needsReview).length,
   };
 }
@@ -574,15 +720,17 @@ export function buildSnapshot(
   source: Snapshot["source"],
   mode: Snapshot["mode"] = "imported",
 ): Snapshot {
-  const monthlyMap = new Map<string, { installs: number; removals: number; amounts: NumericValue[] }>();
+  const monthlyMap = new Map<string, { installs: number; removals: number; lines: number; amounts: NumericValue[]; tariffs: NumericValue[] }>();
   const ruleMap = new Map<string, number>();
   for (const row of rows) {
     const month = row.completedDate.match(/^(\d{4}-\d{2})/)?.[1];
     if (month) {
-      const item = monthlyMap.get(month) ?? { installs: 0, removals: 0, amounts: [] };
+      const item = monthlyMap.get(month) ?? { installs: 0, removals: 0, lines: 0, amounts: [], tariffs: [] };
       if (isInstall(row)) item.installs += 1;
       if (isRemoval(row)) item.removals += 1;
+      item.lines += lineCount(row);
       item.amounts.push(row.monthlyMetering);
+      item.tariffs.push(row.discountedTariff);
       monthlyMap.set(month, item);
     }
     if (row.meteringRule) ruleMap.set(row.meteringRule, (ruleMap.get(row.meteringRule) ?? 0) + 1);
@@ -594,7 +742,7 @@ export function buildSnapshot(
     summary: summarizeRows(rows),
     monthly: [...monthlyMap.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([month, item]) => ({ month, installs: item.installs, removals: item.removals, amount: sumKnown(item.amounts) })),
+      .map(([month, item]) => ({ month, installs: item.installs, removals: item.removals, lines: item.lines, amount: sumKnown(item.amounts), tariff: sumKnown(item.tariffs) })),
     meteringRules: [...ruleMap.entries()].map(([label, value], index) => ({ label, value, color: RULE_COLORS[label] ?? ["#7657d5", "#2a91a8", "#8b6a4f"][index % 3] })),
     owners: buildRanking(rows, "owner"),
     suppliers: buildRanking(rows, "provider"),
@@ -615,6 +763,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     return ({
     ...row,
     businessType,
+    businessCategory: row.businessCategory ?? "",
     ...businessEvent,
     initialCompletedDate,
     rawCompletedDate,
@@ -635,6 +784,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     providerCategory: row.providerCategory ?? "",
     contactLandlineMasked: row.contactLandlineMasked ?? "",
     calculationStatus: row.calculationStatus ?? "",
+    calculationMethod: row.calculationMethod ?? "",
     installmentCalculationFlag: row.installmentCalculationFlag ?? "",
     removalType: row.removalType ?? "",
     userRemovalReason: row.userRemovalReason ?? "",

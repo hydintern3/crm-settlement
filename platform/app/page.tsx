@@ -2,7 +2,7 @@
 
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
-import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, ProfitTargetTables, ProviderReportTables, SalesReportTables, SettlementReportTables, SupplierReportTables } from "./components/ReportTables";
+import { BusinessProgressTables, BusinessReportTables, DataQualityReportTables, DoubleLineOverview, NetGrowthOverview, ProfitTargetTables, ProviderReportTables, SalesReportTables, SettlementReportTables, SupplierReportTables } from "./components/ReportTables";
 import { applyDynamicCalculationRules, buildSettlementReviewSummary, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
 import { BASE_PATH } from "./lib/deployment";
 import type { DataVersionManifest } from "./lib/data-version";
@@ -23,11 +23,11 @@ const NAV_ITEMS = [
 ] as const;
 type ViewName = (typeof NAV_ITEMS)[number][0];
 
-const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], owners: [] as string[], types: [] as string[], statuses: [] as string[], rules: [] as string[], providers: [] as string[], businessNames: [] as string[], services: [] as string[], servicesII: [] as string[], paymentCycles: [] as string[], providerCategories: [] as string[], calculationStatuses: [] as string[], installmentFlags: [] as string[], removalTypes: [] as string[], keyword: "" };
+const EMPTY_FILTERS = { years: [] as string[], months: [] as string[], owners: [] as string[], types: [] as string[], statuses: [] as string[], rules: [] as string[], businessCategories: [] as string[], calculationMethods: [] as string[], belowAuthorizedPrices: [] as string[], providers: [] as string[], businessNames: [] as string[], services: [] as string[], servicesII: [] as string[], paymentCycles: [] as string[], providerCategories: [] as string[], calculationStatuses: [] as string[], installmentFlags: [] as string[], removalTypes: [] as string[], keyword: "" };
 const safeText = (value: string | null | undefined) => value?.trim() || "--";
 const serviceFilterValue = (code: string, name: string) => [code, name].filter(Boolean).join(" · ");
 const numberText = (value: NumericValue, digits = 0) => value === null ? "--" : new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
-const moneyWan = formatWan;
+const moneyYuan = formatWan;
 
 function LoginScreen({ onLogin }: { onLogin: (username: string) => void }) {
   const [username, setUsername] = useState("");
@@ -126,13 +126,13 @@ function RankingChart({ items, onSelect }: { items: RankedItem[]; onSelect?: (na
 }
 
 function exportRows(rows: BusinessRow[]) {
-  const headers = ["设备编号", "业务属性判断（平台）", "判断依据（平台）", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "统计完工日期（平台）", "日期取值来源（平台）", "表内现日期", "活跃状态", "计量规则（按当前日期计算）", "计量规则来源（平台）", "计算状态", "分期计算标识", "拆机类型", "用户拆机原因", "联系人固话（脱敏）", "付款周期", "服务分类", "线数", "月平均计量（原值）", "月平均计量（万元）", "优惠资费", "营销增值费用", "是否低于授权价", "业务毛利"];
+  const headers = ["设备编号", "业务属性判断（平台）", "判断依据（平台）", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "统计完工日期（平台）", "日期取值来源（平台）", "表内现日期", "活跃状态", "计量规则（按当前日期计算）", "计量规则来源（平台）", "业务类别", "计算状态", "计算方式", "分期计算标识", "拆机类型", "用户拆机原因", "联系人固话（脱敏）", "付款周期", "服务分类", "线数", "月平均计量（元）", "优惠资费", "营销增值费用", "是否低于授权价", "业务毛利"];
   const quote = (value: unknown) => {
     const source = String(value ?? "");
     const safe = typeof value === "string" && /^[=+\-@]/.test(source.trimStart()) ? `'${source}` : source;
     return `"${safe.replace(/"/g, '""')}"`;
   };
-  const body = rows.map((row) => [row.deviceCode, row.businessEvent, row.businessEventSource, row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.initialCompletedDate, row.rawCompletedDate, row.completedDate, row.completionDateSource, row.sourceCurrentDate, row.activeStatus, row.meteringRule, row.calculationRuleSource, row.calculationStatus, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked, row.paymentCycle, row.providerCategory, row.lines, row.monthlyMetering, row.monthlyMetering === null ? "" : (row.monthlyMetering / 10_000).toFixed(6), row.discountedTariff, row.marketingFee, row.belowAuthorizedPrice, row.grossProfit].map(quote).join(","));
+  const body = rows.map((row) => [row.deviceCode, row.businessEvent, row.businessEventSource, row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.initialCompletedDate, row.rawCompletedDate, row.completedDate, row.completionDateSource, row.sourceCurrentDate, row.activeStatus, row.meteringRule, row.calculationRuleSource, row.businessCategory, row.calculationStatus, row.calculationMethod, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked, row.paymentCycle, row.providerCategory, row.lines, row.monthlyMetering, row.discountedTariff, row.marketingFee, row.belowAuthorizedPrice, row.grossProfit].map(quote).join(","));
   const blob = new Blob(["\uFEFF", [headers.map(quote).join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -187,17 +187,16 @@ function MultiSelectGrid({ label, options, selected, onChange, limit = 12 }: { l
   </div></fieldset>;
 }
 
-function Metrics({ rows }: { rows: BusinessRow[] }) {
+function Metrics({ rows, showAnalysis = true }: { rows: BusinessRow[]; showAnalysis?: boolean }) {
   const summary = summarizeRows(rows);
   const metrics = [
-    ["业务总记录", numberText(summary.total), "条", "当前筛选结果", "navy"],
-    ["实际活跃", numberText(summary.active), "条", summary.total === null ? "--" : `${((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1)}% 活跃率`, "green"],
-    ["月平均计量", moneyWan(summary.monthlyMetering), "万元", "仅汇总有效金额", "amber"],
+    ["业务总记录", numberText(summary.total), "条", `月平均计量 ${moneyYuan(summary.monthlyMetering)} 元 · 月平均资费 ${moneyYuan(summary.discountedTariff)} 元`, "navy"],
+    ["实际活跃", numberText(summary.active), "条", `${summary.total === null ? "--" : `${((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1)}% 活跃率`} · 月平均计量 ${moneyYuan(summarizeRows(rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常")).monthlyMetering)} 元 · 月平均资费 ${moneyYuan(summarizeRows(rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常")).discountedTariff)} 元`, "green"],
     ["新装", numberText(summary.installs), "条", "当前筛选范围", "blue"],
-    ["拆机", numberText(summary.removals), "条", "当前筛选范围", "rose"],
+    ["拆机", numberText(summary.removals), "条", `月平均计量 ${moneyYuan(summarizeRows(rows.filter((row) => row.businessEvent === "拆机")).monthlyMetering)} 元 · 月平均资费 ${moneyYuan(summarizeRows(rows.filter((row) => row.businessEvent === "拆机")).discountedTariff)} 元`, "rose"],
     ["结算待复核", numberText(summary.review), "条", "不影响版本管理、查询和筛选", "violet"],
   ];
-  return <section className="metric-grid">{metrics.map(([label, value, unit, note, tone]) => <article className={`metric-card metric-${tone}`} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div><small>{note}</small></article>)}</section>;
+  return <><section className="metric-grid">{metrics.map(([label, value, unit, note, tone]) => <article className={`metric-card metric-${tone}`} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div><small>{note}</small></article>)}</section>{showAnalysis && <section className="module-grid report-module-grid"><NetGrowthOverview rows={rows} /><DoubleLineOverview rows={rows} /></section>}</>;
 }
 
 function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: number }) {
@@ -206,8 +205,8 @@ function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: nu
   const safePage = Math.min(page, pages);
   const visible = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
   return <>
-    <div className="table-scroll"><table><thead><tr><th>设备编号</th><th>业务属性判断（平台）</th><th>判断依据（平台）</th><th>业务名称</th><th>负责人</th><th>供应商</th><th>I服务编号</th><th>I服务简称</th><th>II服务编号</th><th>II服务简称</th><th>统计完工日期（平台）</th><th>日期取值来源（平台）</th><th>活跃状态</th><th>计量规则（按当前日期计算）</th><th>计量规则来源（平台）</th><th>计算状态</th><th>分期计算标识</th><th>拆机类型</th><th>用户拆机原因</th><th>联系人固话（脱敏）</th><th>付款周期</th><th>服务分类</th><th className="number">线数</th><th className="number">月平均计量（万元）</th></tr></thead>
-      <tbody>{visible.length ? visible.map((row, index) => <tr key={`${row.deviceCode || row.serviceCode}-${index}`}><td className="code">{safeText(row.deviceCode)}</td><td><span className={`business-chip ${row.businessEvent === "拆机" ? "removal" : ""}`}>{safeText(row.businessEvent)}</span></td><td>{safeText(row.businessEventSource)}</td><td>{safeText(row.businessName)}</td><td>{safeText(row.owner)}</td><td>{safeText(row.provider)}</td><td className="code">{safeText(row.serviceCode)}</td><td>{safeText(row.serviceName)}</td><td className="code">{safeText(row.serviceCodeII)}</td><td>{safeText(row.serviceNameII)}</td><td>{safeText(row.completedDate)}</td><td><span className={`date-source-chip ${row.completionDateSource === "完工日期兜底" ? "fallback" : row.completionDateSource === "缺失" ? "missing" : ""}`}>{safeText(row.completionDateSource)}</span></td><td><span className={`active-chip ${/不活跃|停止|暂停/.test(row.activeStatus) ? "inactive" : ""}`}>{safeText(row.activeStatus)}</span></td><td>{safeText(row.meteringRule)}</td><td>{safeText(row.calculationRuleSource)}</td><td>{safeText(row.calculationStatus)}</td><td>{safeText(row.installmentCalculationFlag)}</td><td>{safeText(row.removalType)}</td><td>{safeText(row.userRemovalReason)}</td><td>{safeText(row.contactLandlineMasked)}</td><td>{safeText(row.paymentCycle)}</td><td>{safeText(row.providerCategory)}</td><td className="number">{numberText(row.lines)}</td><td className="number">{row.monthlyMetering === null ? "--" : `${formatWan(row.monthlyMetering)} 万元`}</td></tr>) : <tr><td className="empty-cell" colSpan={24}>--　暂无匹配数据</td></tr>}</tbody></table></div>
+    <div className="table-scroll"><table><thead><tr><th>设备编号</th><th>业务属性判断（平台）</th><th>判断依据（平台）</th><th>业务名称</th><th>负责人</th><th>供应商</th><th>I服务编号</th><th>I服务简称</th><th>II服务编号</th><th>II服务简称</th><th>统计完工日期（平台）</th><th>日期取值来源（平台）</th><th>活跃状态</th><th>计量规则（按当前日期计算）</th><th>计量规则来源（平台）</th><th>计算状态</th><th>分期计算标识</th><th>拆机类型</th><th>用户拆机原因</th><th>联系人固话（脱敏）</th><th>付款周期</th><th>服务分类</th><th className="number">线数</th><th className="number">月平均计量（元）</th></tr></thead>
+      <tbody>{visible.length ? visible.map((row, index) => <tr key={`${row.deviceCode || row.serviceCode}-${index}`}><td className="code">{safeText(row.deviceCode)}</td><td><span className={`business-chip ${row.businessEvent === "拆机" ? "removal" : ""}`}>{safeText(row.businessEvent)}</span></td><td>{safeText(row.businessEventSource)}</td><td>{safeText(row.businessName)}</td><td>{safeText(row.owner)}</td><td>{safeText(row.provider)}</td><td className="code">{safeText(row.serviceCode)}</td><td>{safeText(row.serviceName)}</td><td className="code">{safeText(row.serviceCodeII)}</td><td>{safeText(row.serviceNameII)}</td><td>{safeText(row.completedDate)}</td><td><span className={`date-source-chip ${row.completionDateSource === "完工日期兜底" ? "fallback" : row.completionDateSource === "缺失" ? "missing" : ""}`}>{safeText(row.completionDateSource)}</span></td><td><span className={`active-chip ${/不活跃|停止|暂停/.test(row.activeStatus) ? "inactive" : ""}`}>{safeText(row.activeStatus)}</span></td><td>{safeText(row.meteringRule)}</td><td>{safeText(row.calculationRuleSource)}</td><td>{safeText(row.calculationStatus)}</td><td>{safeText(row.installmentCalculationFlag)}</td><td>{safeText(row.removalType)}</td><td>{safeText(row.userRemovalReason)}</td><td>{safeText(row.contactLandlineMasked)}</td><td>{safeText(row.paymentCycle)}</td><td>{safeText(row.providerCategory)}</td><td className="number">{numberText(row.lines)}</td><td className="number">{row.monthlyMetering === null ? "--" : `${formatWan(row.monthlyMetering)} 元`}</td></tr>) : <tr><td className="empty-cell" colSpan={24}>--　暂无匹配数据</td></tr>}</tbody></table></div>
     <div className="table-foot"><span>共 {rows.length} 条 · 第 {safePage} / {pages} 页</span><div className="pager"><button disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))}>上一页</button><button disabled={safePage >= pages} onClick={() => setPage(Math.min(pages, safePage + 1))}>下一页</button></div></div>
   </>;
 }
@@ -311,6 +310,7 @@ export default function Home() {
     return (!filters.years.length || filters.years.includes(year)) && (!filters.months.length || filters.months.includes(month)) &&
       (!filters.owners.length || filters.owners.includes(row.owner)) && (!filters.types.length || filters.types.includes(row.businessEvent)) &&
       (!filters.statuses.length || filters.statuses.includes(row.activeStatus)) && (!filters.rules.length || filters.rules.includes(row.meteringRule)) &&
+      (!filters.businessCategories.length || filters.businessCategories.includes(row.businessCategory)) && (!filters.calculationMethods.length || filters.calculationMethods.includes(row.calculationMethod)) && (!filters.belowAuthorizedPrices.length || filters.belowAuthorizedPrices.includes(row.belowAuthorizedPrice)) &&
       (!filters.providers.length || filters.providers.includes(row.provider)) && (!filters.businessNames.length || filters.businessNames.includes(row.businessName)) &&
       (!filters.services.length || filters.services.includes(serviceFilterValue(row.serviceCode, row.serviceName))) && (!filters.servicesII.length || filters.servicesII.includes(serviceFilterValue(row.serviceCodeII, row.serviceNameII))) &&
       (!filters.paymentCycles.length || filters.paymentCycles.includes(row.paymentCycle)) && (!filters.providerCategories.length || filters.providerCategories.includes(row.providerCategory)) &&
@@ -517,6 +517,9 @@ export default function Home() {
   const rules = [...new Set(calculatedRows.map((row) => row.meteringRule).filter(Boolean))].sort();
   const owners = [...new Set(calculatedRows.map((row) => row.owner).filter(Boolean))].sort();
   const businessTypes = [...new Set(calculatedRows.map((row) => row.businessEvent).filter(Boolean))].sort();
+  const businessCategories = [...new Set(calculatedRows.map((row) => row.businessCategory).filter(Boolean))].sort();
+  const calculationMethods = [...new Set(calculatedRows.map((row) => row.calculationMethod).filter(Boolean))].sort();
+  const belowAuthorizedPrices = [...new Set(calculatedRows.map((row) => row.belowAuthorizedPrice).filter(Boolean))].sort();
   const providers = [...new Set(calculatedRows.map((row) => row.provider).filter(Boolean))].sort();
   const businessNames = [...new Set(calculatedRows.map((row) => row.businessName).filter(Boolean))].sort();
   const services = [...new Set(calculatedRows.map((row) => serviceFilterValue(row.serviceCode, row.serviceName)).filter(Boolean))].sort();
@@ -559,7 +562,7 @@ export default function Home() {
     });
     navigate("统一查询");
   }
-  const moreFilterCount = filters.providers.length + filters.businessNames.length + filters.services.length + filters.servicesII.length + filters.paymentCycles.length + filters.providerCategories.length + filters.calculationStatuses.length + filters.installmentFlags.length + filters.removalTypes.length;
+  const moreFilterCount = filters.businessCategories.length + filters.calculationMethods.length + filters.belowAuthorizedPrices.length + filters.providers.length + filters.businessNames.length + filters.services.length + filters.servicesII.length + filters.paymentCycles.length + filters.providerCategories.length + filters.calculationStatuses.length + filters.installmentFlags.length + filters.removalTypes.length;
   const pinnedTemplates = chartTemplates.filter((template) => template.pinned && !template.archived).sort((left, right) => left.order - right.order);
 
   const filterBar = <section className="filter-bar"><div className="filter-toolbar"><label className="search-box"><span>⌕</span><input value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} placeholder="搜索业务、服务、拆机原因、固话尾号…" /></label><span className="filter-tip">点击可多选，长按约半秒切换为单选</span><button className="ghost-button filter-toggle" onClick={() => setShowMoreFilters((value) => !value)}>{showMoreFilters ? "收起扩展筛选" : `更多筛选${moreFilterCount ? `（${moreFilterCount}）` : ""}`}</button><button className="clear-button" onClick={() => setFilters({ ...EMPTY_FILTERS })}>重置筛选</button></div><div className="filter-grid">
@@ -570,6 +573,9 @@ export default function Home() {
     <MultiSelectGrid label="活跃状态" options={statuses} selected={filters.statuses} onChange={(statuses) => setFilters((value) => ({ ...value, statuses }))} />
     <MultiSelectGrid label="计量规则" options={rules} selected={filters.rules} onChange={(rules) => setFilters((value) => ({ ...value, rules }))} />
     {showMoreFilters && <>
+      <MultiSelectGrid label="业务类别" options={businessCategories} selected={filters.businessCategories} onChange={(businessCategories) => setFilters((value) => ({ ...value, businessCategories }))} />
+      <MultiSelectGrid label="计算方式" options={calculationMethods} selected={filters.calculationMethods} onChange={(calculationMethods) => setFilters((value) => ({ ...value, calculationMethods }))} />
+      <MultiSelectGrid label="是否低于授权价" options={belowAuthorizedPrices} selected={filters.belowAuthorizedPrices} onChange={(belowAuthorizedPrices) => setFilters((value) => ({ ...value, belowAuthorizedPrices }))} />
       <MultiSelectGrid label="供应商" options={providers} selected={filters.providers} onChange={(providers) => setFilters((value) => ({ ...value, providers }))} />
       <MultiSelectGrid label="业务名称" options={businessNames} selected={filters.businessNames} onChange={(businessNames) => setFilters((value) => ({ ...value, businessNames }))} />
       <MultiSelectGrid label="I 服务" options={services} selected={filters.services} onChange={(services) => setFilters((value) => ({ ...value, services }))} />
@@ -585,12 +591,12 @@ export default function Home() {
   let content: React.ReactNode;
   if (activeNav === "总览") content = <><section className="dashboard-toolbar"><div><strong>自定义分析总览</strong><span>所有图表基于当前筛选的 {filteredRows.length.toLocaleString("zh-CN")} 条记录实时重算</span></div><div><button className="ghost-button" onClick={() => setShowTemplateManager((value) => !value)}>{showTemplateManager ? "收起模板管理" : "管理模板"}</button><button className="ghost-button" onClick={() => setDashboardEditing((value) => !value)}>{dashboardEditing ? "完成排版" : "编辑总览"}</button><button className="primary-button" onClick={() => setBuilderTemplate(null)}>＋ 新建图表</button></div></section>{chartNotice && <div className={`center-notice ${chartNotice.tone}`}>{chartNotice.text}</div>}{showTemplateManager && <TemplateManager templates={chartTemplates} onEdit={(template) => setBuilderTemplate(template)} onDuplicate={(template) => void duplicateChart(template)} onTogglePin={toggleChartPin} onArchive={archiveChart} />}<Metrics rows={filteredRows} />{pinnedTemplates.length ? <section className="dashboard-grid custom-dashboard-grid">{pinnedTemplates.map((template, index) => <DashboardChartCard key={`${template.id}-${template.revision}`} template={template} rows={filteredRows} editing={dashboardEditing} first={index === 0} last={index === pinnedTemplates.length - 1} onEdit={() => setBuilderTemplate(template)} onTogglePin={() => toggleChartPin(template)} onArchive={() => archiveChart(template)} onMove={(direction) => void moveChart(template, direction)} onSelect={selectChartValue} onViewData={() => setChartDataTemplate(template)} />)}</section> : <Panel label="EMPTY DASHBOARD" title="总览还没有固定图表" className="wide-panel"><div className="chart-empty"><span>点击“新建图表”，配置维度和指标后固定到总览。</span></div></Panel>}</>;
   else if (activeNav === "统一查询") content = <Panel label="DETAIL QUERY" title="业务明细" aside={<button className="primary-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出筛选结果</button>}><p className="panel-note">筛选、分页和导出均基于当前真实数据；空字段统一显示为 --。</p><DataTable rows={filteredRows} /></Panel>;
-  else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} /><BusinessProgressTables rows={filteredRows} rules={effectiveCalculationRules} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section><BusinessReportTables rows={filteredRows} /></>;
+  else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} showAnalysis={false} /><BusinessProgressTables rows={filteredRows} rules={effectiveCalculationRules} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section><BusinessReportTables rows={filteredRows} /></>;
   else if (activeNav === "销售分析") content = <><section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SalesReportTables rows={filteredRows} /></>;
   else if (activeNav === "供应商分析") content = <><section className="module-grid"><Panel label="SUPPLIER RANKING" title="供应商进单排名"><RankingChart items={analysis.suppliers} onSelect={(name) => selectRank(name, "supplier")} /></Panel><Panel label="SUPPLIER DETAILS" title="供应商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SupplierReportTables rows={filteredRows} /></>;
   else if (activeNav === "服务商分析") content = <><section className="module-grid"><Panel label="SERVICE PROVIDER RANKING" title="服务商进单排名（I 服务编号）"><RankingChart items={analysis.providers} onSelect={(name) => selectRank(name, "service")} /></Panel><Panel label="SERVICE PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><ProviderReportTables rows={filteredRows} /></>;
   else if (activeNav === "毛利与目标") content = <ProfitTargetTables />;
-  else if (activeNav === "结算中心") content = <><Metrics rows={filteredRows} /><SettlementReportTables /></>;
+  else if (activeNav === "结算中心") content = <><Metrics rows={filteredRows} showAnalysis={false} /><SettlementReportTables rows={filteredRows} /></>;
   else content = <DataCenterView snapshot={snapshot} admin={admin} versions={versions} activeId={activeVersionId} workingId={versionWorking} notice={centerNotice} config={calculationRules} rows={calculatedRows} onUpload={() => setShowImport(true)} onRefresh={() => void refreshDataCenter()} onActivate={(id) => void activateDataVersion(id)} onDelete={(id) => void deleteDataVersion(id)} onCompose={composeDataVersions} onLogout={() => void logout()} onConfigChange={setCalculationRules} />;
 
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">衡</div><div><strong>衡析</strong><span>CRM 业务分析平台</span></div></div><nav>{NAV_ITEMS.map(([name, description], index) => <button key={name} className={activeNav === name ? "active" : ""} onClick={() => navigate(name)}><span className="nav-icon">{String(index + 1).padStart(2, "0")}</span><span><strong>{name}</strong><small>{description}</small></span></button>)}</nav><div className="sidebar-foot"><i className={snapshot.mode === "empty" ? "empty" : ""} /><div><strong>{snapshot.mode === "empty" ? "等待导入数据" : "数据已连接"}</strong><small>{snapshot.source.currentFile}</small></div></div></aside>

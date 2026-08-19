@@ -128,11 +128,14 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /跟随当前日期/);
   assert.match(pageSource, /业务属性判断（平台）/);
   assert.match(pageSource, /计量规则（按当前日期计算）/);
+  assert.match(pageSource, /是否低于授权价/);
   assert.match(reportTablesSource, /不生成模拟金额/);
   assert.match(reportTablesSource, /全年业务拆装情况/);
   assert.match(reportTablesSource, /完工批次留存分析/);
   assert.match(reportTablesSource, /完工日期兜底审计/);
   assert.match(reportTablesSource, /服务商综合分布/);
+  assert.match(reportTablesSource, /I \/ II 服务组合分析/);
+  assert.match(reportTablesSource, /服务商新量、存量政策分布/);
   assert.match(reportTablesSource, /供应商综合分析/);
   assert.match(reportTablesSource, /总计 \/ 总览/);
   assert.match(reportTablesSource, /服务商拆机排名/);
@@ -143,6 +146,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(reportTablesSource, /净增月平均资费/);
   assert.match(reportTablesSource, /II服务商进单排名/);
   assert.match(reportTablesSource, /结算按业务汇总/);
+  assert.match(reportTablesSource, /CRM 结算准备明细/);
+  assert.match(reportTablesSource, /服务商结算候选汇总/);
+  assert.match(reportTablesSource, /不模拟运营应收/);
   assert.doesNotMatch(reportTablesSource, /身份证号码|银行卡号|手机号码/);
   await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));
   await assert.rejects(access(new URL("dist/client/data/local-snapshot.json", root)));
