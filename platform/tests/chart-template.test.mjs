@@ -28,15 +28,15 @@ test("chart aggregation handles date buckets, nulls and real zero", () => {
   assert.equal(formatWan(null), "--");
 });
 
-test("chart aggregation supports business metrics, distinct counts and top N other", () => {
+test("chart aggregation supports business metrics, distinct counts and full-category scrolling", () => {
   const draft = defaultChartDraft();
   draft.dimension = { field: "provider" };
   draft.measures = [{ field: "deviceCode", aggregation: "distinct" }];
   draft.options.topN = 3;
-  draft.options.showOther = true;
   const distinct = buildChartData(rows, draft);
   assert.equal(distinct.categories.length, 4);
-  assert.equal(distinct.categories.at(-1), "其他");
+  assert.equal(distinct.categories.includes("其他"), false);
+  assert.equal(distinct.warnings[0], "类别较多，图表初始显示 3 项，可使用图内滚动条查看全部 4 项");
   assert.equal(distinct.series[0].values.reduce((sum, value) => sum + Number(value), 0), 4);
 
   draft.dimension = { field: "owner" };
@@ -62,11 +62,11 @@ test("series split and active rate are calculated from the same grouped records"
 });
 
 test("template parser constrains unsafe and incompatible configurations", () => {
-  assert.equal(defaultChartDraft().options.topN, 50);
+  assert.equal(defaultChartDraft().options.topN, 12);
   const parsed = parseChartDraft({ ...defaultChartDraft(), title: "  自定义图表  ", options: { ...defaultChartDraft().options, topN: 999 } });
   assert.equal(parsed.title, "自定义图表");
   assert.equal(parsed.options.topN, 50);
-  assert.equal(parseChartDraft({ ...defaultChartDraft(), options: { ...defaultChartDraft().options, showLabels: false } }).options.showLabels, true);
+  assert.equal(parseChartDraft({ ...defaultChartDraft(), options: { ...defaultChartDraft().options, showLabels: false } }).options.showLabels, false);
   const invalid = { ...defaultChartDraft(), chartType: "pie", measures: [{ field: "rows", aggregation: "count" }, { field: "lines", aggregation: "sum" }] };
   assert.deepEqual(validateChartDraft(invalid), ["饼图和环形图只能使用一个指标"]);
   assert.throws(() => parseChartDraft(invalid), /只能使用一个指标/);
@@ -75,13 +75,14 @@ test("template parser constrains unsafe and incompatible configurations", () => 
   assert.equal(JSON.stringify(parsed).includes("javascript"), false);
 });
 
-test("legacy top 10 templates with other grouping migrate to top 50", () => {
+test("legacy templates migrate to scrollable full-category charts", () => {
   const legacy = defaultChartDraft();
   legacy.options.topN = 10;
   legacy.options.showOther = true;
-  assert.equal(migrateChartDraft(legacy, 1).options.topN, 50);
-  assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, showLabels: false } }, 2).options.showLabels, true);
+  assert.equal(migrateChartDraft(legacy, 1).options.topN, 12);
+  assert.equal(migrateChartDraft(legacy, 1).options.showOther, false);
+  assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, showLabels: false } }, 2).options.showLabels, false);
   legacy.options.showOther = false;
   assert.equal(migrateChartDraft(legacy, 1).options.topN, 10);
-  assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, topN: 20, showOther: true } }, 1).options.topN, 20);
+  assert.equal(migrateChartDraft({ ...legacy, options: { ...legacy.options, topN: 20, showOther: true } }, 1).options.topN, 12);
 });

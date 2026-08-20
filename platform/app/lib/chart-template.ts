@@ -1,6 +1,6 @@
 import type { BusinessRow } from "./data-model";
 
-export const CHART_SCHEMA_VERSION = 3;
+export const CHART_SCHEMA_VERSION = 6;
 export const MAX_DASHBOARD_TEMPLATES = 30;
 export const DEFAULT_CHART_TOP_N = 50;
 
@@ -127,7 +127,7 @@ export function defaultChartDraft(order = 100): ChartTemplateDraft {
     chartType: "bar",
     dimension: { field: "businessEvent" },
     measures: [{ field: "rows", aggregation: "count" }],
-    options: { topN: DEFAULT_CHART_TOP_N, includeEmpty: false, showOther: true, sort: "valueDesc", orientation: "vertical", showLabels: true, showLegend: true, smooth: false, size: "half", height: 300 },
+    options: { topN: 12, includeEmpty: false, showOther: false, sort: "valueDesc", orientation: "vertical", showLabels: true, showLegend: true, smooth: false, size: "half", height: 300 },
     pinned: true,
     archived: false,
     order,
@@ -178,12 +178,12 @@ export function parseChartDraft(value: unknown): ChartTemplateDraft {
     seriesField,
     measures,
     options: {
-      topN: integer(optionsSource.topN, DEFAULT_CHART_TOP_N, 3, 50),
+      topN: integer(optionsSource.topN, 12, 3, 50),
       includeEmpty: boolean(optionsSource.includeEmpty, false),
-      showOther: boolean(optionsSource.showOther, true),
+      showOther: boolean(optionsSource.showOther, false),
       sort: ["dimensionAsc", "dimensionDesc", "valueAsc", "valueDesc"].includes(String(optionsSource.sort)) ? optionsSource.sort as ChartTemplateDraft["options"]["sort"] : "valueDesc",
       orientation: optionsSource.orientation === "horizontal" ? "horizontal" : "vertical",
-      showLabels: true,
+      showLabels: boolean(optionsSource.showLabels, true),
       showLegend: boolean(optionsSource.showLegend, true),
       smooth: boolean(optionsSource.smooth, false),
       size: optionsSource.size === "wide" ? "wide" : "half",
@@ -200,7 +200,9 @@ export function parseChartDraft(value: unknown): ChartTemplateDraft {
 
 export function migrateChartDraft(draft: ChartTemplateDraft, sourceSchemaVersion: number) {
   const topN = sourceSchemaVersion < 2 && draft.options.topN === 10 && draft.options.showOther ? DEFAULT_CHART_TOP_N : draft.options.topN;
-  return { ...draft, options: { ...draft.options, topN, showLabels: true } };
+  return sourceSchemaVersion < 6
+    ? { ...draft, options: { ...draft.options, topN: Math.min(topN, 12), showOther: false } }
+    : { ...draft, options: { ...draft.options, topN } };
 }
 
 export function validateChartDraft(draft: ChartTemplateDraft) {
@@ -224,8 +226,8 @@ export const DEFAULT_CHART_TEMPLATES: readonly ChartTemplate[] = [
   systemTemplate("system-monthly-metering", { ...defaultChartDraft(10), title: "月平均计量趋势", description: "按有效完工月份汇总月平均计量", chartType: "bar", dimension: { field: "completedDate", timeGranularity: "month" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, sort: "dimensionAsc", size: "wide" } }),
   systemTemplate("system-metering-rule", { ...defaultChartDraft(20), title: "计量规则分布", description: "新增量、新量、存量和超期记录结构", chartType: "donut", dimension: { field: "meteringRule" }, measures: [{ field: "rows", aggregation: "count" }] }),
   systemTemplate("system-owner-ranking", { ...defaultChartDraft(30), title: "负责人业绩", description: "负责人月平均计量 Top 50", dimension: { field: "owner" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "供应商分布", description: "按供应商汇总线路数与月平均计量 Top 50", dimension: { field: "provider" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量 Top 50；采用折线展示，避免多指标柱状图过度拥挤", chartType: "line", dimension: { field: "serviceCode" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "vertical", size: "wide", height: 380, showLabels: false, smooth: true } }),
+  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "供应商分布", description: "按供应商汇总线路数与月平均计量，可滚动查看全部分类", dimension: { field: "provider" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
+  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "line", dimension: { field: "serviceCode" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "vertical", size: "wide", height: 380, showLabels: false, smooth: true } }),
 ] as const;
 
 export function templateDraft(template: ChartTemplate): ChartTemplateDraft {

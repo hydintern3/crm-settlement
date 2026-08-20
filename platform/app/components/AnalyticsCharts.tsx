@@ -41,6 +41,12 @@ function formatValue(value: unknown, unit: string) {
   return formatChartNumber(value, unit);
 }
 
+function formatDataValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "--";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : "--";
+}
+
 export function ConfigurableChart({ data, template, onSelect }: { data: AggregatedChartData; template: ChartTemplateDraft; onSelect?: (name: string) => void }) {
   if (!data.categories.length || !data.series.length || data.series.every((series) => series.values.every((value) => value === null))) return <EmptyChart />;
   const base: EChartsCoreOption = {
@@ -52,6 +58,7 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
   };
   let option: EChartsCoreOption;
   if (template.chartType === "pie" || template.chartType === "donut") {
+    const crowded = data.categories.length > template.options.topN;
     option = {
       ...base,
       tooltip: { trigger: "item", formatter: (params: unknown) => {
@@ -59,7 +66,7 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
         return `${item.name ?? "--"}<br/>${formatValue(item.value, data.unit)} · ${item.percent ?? 0}%`;
       } },
       legend: template.options.showLegend ? { type: "scroll", orient: "vertical", right: 4, top: "middle", textStyle: axisText } : undefined,
-      series: [{ type: "pie", radius: template.chartType === "donut" ? ["42%", "68%"] : [0, "70%"], center: [template.options.showLegend ? "40%" : "50%", "54%"], avoidLabelOverlap: true, label: { show: true, formatter: (params: unknown) => { const item = params as { name?: string; value?: unknown; percent?: number }; return `${item.name ?? "--"}\n${formatValue(item.value, data.unit)} · ${item.percent ?? 0}%`; } }, itemStyle: { borderColor: "#fff", borderWidth: 2 }, data: data.categories.map((name, index) => ({ name, value: data.series[0].values[index] })) }],
+      series: [{ type: "pie", radius: template.chartType === "donut" ? ["42%", "68%"] : [0, "70%"], center: [template.options.showLegend ? "40%" : "50%", "54%"], avoidLabelOverlap: true, label: { show: template.options.showLabels && !crowded, formatter: (params: unknown) => { const item = params as { name?: string; value?: unknown; percent?: number }; return `${item.name ?? "--"}\n${formatDataValue(item.value)} · ${item.percent ?? 0}%`; } }, itemStyle: { borderColor: "#fff", borderWidth: 2 }, data: data.categories.map((name, index) => ({ name, value: data.series[0].values[index] })) }],
     };
   } else if (template.chartType === "scatter") {
     const x = data.series[0];
@@ -69,20 +76,26 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
       grid: { left: 62, right: 28, top: 42, bottom: 48 },
       xAxis: { type: "value", name: x.name, nameLocation: "middle", nameGap: 32, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
       yAxis: { type: "value", name: y.name, nameLocation: "middle", nameGap: 48, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText },
-      series: [{ name: `${x.name} / ${y.name}`, type: "scatter", symbolSize: 12, label: { show: true, position: "top", formatter: (params: unknown) => { const item = params as { name?: string; value?: unknown[] }; return `${item.name ?? ""}: ${formatValue(item.value?.[0], data.unit)} / ${formatValue(item.value?.[1], data.unit)}`; } }, data: data.categories.map((name, index) => ({ name, value: [x.values[index], y.values[index]] })) }],
+      series: [{ name: `${x.name} / ${y.name}`, type: "scatter", symbolSize: 12, label: { show: template.options.showLabels, position: "top", formatter: (params: unknown) => { const item = params as { name?: string; value?: unknown[] }; return `${item.name ?? ""}: ${formatDataValue(item.value?.[0])} / ${formatDataValue(item.value?.[1])}`; } }, data: data.categories.map((name, index) => ({ name, value: [x.values[index], y.values[index]] })) }],
     };
   } else {
     const horizontal = template.options.orientation === "horizontal" && (template.chartType === "bar" || template.chartType === "stackedBar");
     const categoryAxis = { type: "category" as const, data: data.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: "#dfe5ed" } }, axisLabel: { ...axisText, rotate: horizontal ? 0 : data.categories.length > 10 ? 30 : 0, width: horizontal ? 90 : undefined, overflow: "truncate" as const } };
     const valueAxis = { type: "value" as const, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText };
     const isLine = template.chartType === "line" || template.chartType === "area";
+    const hasOverflow = data.categories.length > template.options.topN;
+    const zoom = hasOverflow
+      ? horizontal
+        ? [{ type: "inside", yAxisIndex: 0 }, { type: "slider", yAxisIndex: 0, orient: "vertical", width: 14, right: 2, top: template.options.showLegend ? 48 : 24, bottom: 34, startValue: 0, endValue: template.options.topN - 1 }]
+        : [{ type: "inside", xAxisIndex: 0 }, { type: "slider", xAxisIndex: 0, height: 14, bottom: 2, startValue: 0, endValue: template.options.topN - 1 }]
+      : undefined;
     option = {
       ...base,
-      grid: { left: horizontal ? 105 : 58, right: 26, top: template.options.showLegend ? 48 : 24, bottom: data.categories.length > 10 && !horizontal ? 66 : 42 },
+      grid: { left: horizontal ? 105 : 58, right: horizontal && hasOverflow ? 38 : 26, top: template.options.showLegend ? 48 : 24, bottom: hasOverflow || (data.categories.length > 10 && !horizontal) ? 66 : 42 },
       xAxis: horizontal ? valueAxis : categoryAxis,
       yAxis: horizontal ? categoryAxis : valueAxis,
-      dataZoom: data.categories.length > 14 && !horizontal ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
-      series: data.series.map((series) => isLine ? ({ name: series.name, type: "line", smooth: template.options.smooth, connectNulls: false, areaStyle: template.chartType === "area" ? { opacity: .14 } : undefined, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, data.unit) }, labelLayout: { hideOverlap: false }, data: series.values }) : ({ name: series.name, type: "bar", stack: template.chartType === "stackedBar" ? "total" : undefined, barMaxWidth: 30, label: { show: true, position: horizontal ? "right" : "top", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, data.unit) }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] }, data: series.values })),
+      dataZoom: zoom,
+      series: data.series.map((series) => isLine ? ({ name: series.name, type: "line", smooth: template.options.smooth, connectNulls: false, areaStyle: template.chartType === "area" ? { opacity: .14 } : undefined, label: { show: template.options.showLabels, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, data: series.values }) : ({ name: series.name, type: "bar", stack: template.chartType === "stackedBar" ? "total" : undefined, barMaxWidth: 30, label: { show: template.options.showLabels, position: horizontal ? "right" : "top", formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] }, data: series.values })),
     };
   }
   return <Chart option={option} onSelect={onSelect} height={template.options.height} />;
@@ -99,7 +112,7 @@ export function MonthlyChart({ data }: { data: Snapshot["monthly"] }) {
     xAxis: { type: "category", data: data.map((item) => item.month.includes("-") ? item.month : `${item.month}月`), axisLine: { lineStyle: { color: "#dfe5ed" } }, axisTick: { show: false }, axisLabel: { ...axisText, rotate: data.length > 8 ? 30 : 0 } },
     yAxis: [{ type: "value", name: "元", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText }, { type: "value", name: "线路数", splitLine: { show: false }, axisLabel: axisText }],
     dataZoom: data.length > 8 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
-    series: [{ name: "月平均计量", type: "bar", barMaxWidth: 18, yAxisIndex: 0, label: { show: true, position: "top", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: data.map((item) => item.amount) }, { name: "月平均资费", type: "line", yAxisIndex: 0, smooth: true, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, data: data.map((item) => item.tariff) }, { name: "线路数", type: "line", yAxisIndex: 1, smooth: true, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "线") }, data: data.map((item) => item.lines) }],
+    series: [{ name: "月平均计量", type: "line", yAxisIndex: 0, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, data: data.map((item) => item.amount) }, { name: "月平均资费", type: "line", yAxisIndex: 0, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, data: data.map((item) => item.tariff) }, { name: "线路数", type: "bar", yAxisIndex: 1, barMaxWidth: 18, label: { show: true, position: "top", formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: data.map((item) => item.lines) }],
   };
   return <Chart option={option} />;
 }
@@ -150,8 +163,8 @@ export function DistributionChart({ items, onSelect }: { items: RankedItem[]; on
     yAxis: [{ type: "value", name: "线路数", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText }, { type: "value", name: "元", splitLine: { show: false }, axisLabel: axisText }],
     dataZoom: data.length > 10 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
     series: [
-      { name: "线路数", type: "bar", yAxisIndex: 0, barMaxWidth: 26, label: { show: true, position: "top", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "线") }, data: data.map((item) => item.lines), itemStyle: { borderRadius: [4, 4, 0, 0] } },
-      { name: "月平均计量", type: "line", yAxisIndex: 1, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, data: data.map((item) => item.amount) },
+      { name: "线路数", type: "bar", yAxisIndex: 0, barMaxWidth: 26, label: { show: true, position: "top", formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, data: data.map((item) => item.lines), itemStyle: { borderRadius: [4, 4, 0, 0] } },
+      { name: "月平均计量", type: "line", yAxisIndex: 1, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, data: data.map((item) => item.amount) },
     ],
   };
   return <Chart option={option} onSelect={onSelect} height={340} />;

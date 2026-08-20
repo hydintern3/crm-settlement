@@ -79,19 +79,16 @@ function scoreCategories(groups: Map<string, BusinessRow[]>, measure: ChartMeasu
 export function buildChartData(rows: BusinessRow[], template: ChartTemplateDraft): AggregatedChartData {
   const initialGroups = groupRows(rows, template, null);
   const scores = scoreCategories(initialGroups, template.measures[0]);
-  let categories = [...scores.keys()];
+  const categories = [...scores.keys()];
   if (template.options.sort === "dimensionAsc" || template.options.sort === "dimensionDesc") categories.sort((left, right) => left.localeCompare(right, "zh-CN") * (template.options.sort === "dimensionDesc" ? -1 : 1));
   else categories.sort((left, right) => ((scores.get(left) ?? 0) - (scores.get(right) ?? 0)) * (template.options.sort === "valueDesc" ? -1 : 1));
 
   const warnings: string[] = [];
-  let groups = initialGroups;
   if (categories.length > template.options.topN) {
-    const retained = new Set(categories.slice(0, template.options.topN));
-    warnings.push(`类别较多，仅显示前 ${template.options.topN} 项${template.options.showOther ? "，其余合并为“其他”" : ""}`);
-    groups = groupRows(rows, template, retained, template.options.showOther);
-    categories = categories.slice(0, template.options.topN);
-    if (template.options.showOther) categories.push("其他");
+    warnings.push(`类别较多，图表初始显示 ${template.options.topN} 项，可使用图内滚动条查看全部 ${categories.length} 项`);
   }
+
+  const groups = initialGroups;
 
   const seriesCategories = template.seriesField ? [...new Set([...groups.keys()].map((key) => key.split("\u0000")[1]))].sort((left, right) => left.localeCompare(right, "zh-CN")).slice(0, 12) : [];
   if (template.seriesField && new Set([...groups.keys()].map((key) => key.split("\u0000")[1])).size > 12) warnings.push("系列超过 12 项，仅展示前 12 项");
