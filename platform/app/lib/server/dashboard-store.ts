@@ -35,10 +35,10 @@ async function readDashboard(): Promise<DashboardFile> {
     const templates = parsed.templates.map((template) => {
       const sourceSchemaVersion = Number(template.schemaVersion ?? parsed.schemaVersion ?? 1);
       const migrated = migrateChartDraft(parseChartDraft(template), sourceSchemaVersion);
-      const corrected = template.id === "system-provider-ranking" && sourceSchemaVersion < 3
-        ? { ...migrated, title: "供应商分布", description: "按供应商汇总线路数与月平均计量 Top 50", dimension: { field: "provider" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }] }
-        : template.id === "system-service-ranking" && sourceSchemaVersion < 7
-          ? { ...migrated, title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "bar" as const, dimension: { field: "serviceCode" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }], options: { ...migrated.options, topN: 12, orientation: "horizontal" as const, showLabels: false, showOther: false, size: "wide" as const, height: 420, smooth: false } }
+      const corrected = template.id === "system-provider-ranking" && sourceSchemaVersion < 8
+        ? { ...migrated, title: "供应商分布", description: "按供应商汇总线路数与月平均计量，可滚动查看全部分类", chartType: "combo" as const, dimension: { field: "provider" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }], options: { ...migrated.options, orientation: "horizontal" as const } }
+        : template.id === "system-service-ranking" && sourceSchemaVersion < 8
+          ? { ...migrated, title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "combo" as const, dimension: { field: "serviceCode" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }], options: { ...migrated.options, topN: 12, orientation: "horizontal" as const, showLabels: false, showOther: false, size: "wide" as const, height: 420, smooth: false } }
           : migrated;
       return {
         ...template,

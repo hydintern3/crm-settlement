@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildChartData } from "../app/lib/chart-aggregation.ts";
-import { defaultChartDraft, migrateChartDraft, parseChartDraft, validateChartDraft } from "../app/lib/chart-template.ts";
+import { DEFAULT_CHART_TEMPLATES, defaultChartDraft, migrateChartDraft, parseChartDraft, validateChartDraft } from "../app/lib/chart-template.ts";
 import { toBusinessRow } from "../app/lib/data-model.ts";
 import { formatWan } from "../app/lib/formatting.ts";
 
@@ -67,12 +67,22 @@ test("template parser constrains unsafe and incompatible configurations", () => 
   assert.equal(parsed.title, "自定义图表");
   assert.equal(parsed.options.topN, 50);
   assert.equal(parseChartDraft({ ...defaultChartDraft(), options: { ...defaultChartDraft().options, showLabels: false } }).options.showLabels, false);
+  const plainBar = parseChartDraft({ ...defaultChartDraft(), measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }] });
+  assert.equal(plainBar.chartType, "bar");
+  const combo = parseChartDraft({ ...plainBar, chartType: "combo" });
+  assert.equal(combo.chartType, "combo");
+  assert.deepEqual(validateChartDraft({ ...plainBar, chartType: "combo", measures: [{ field: "monthlyMetering", aggregation: "sum" }, { field: "discountedTariff", aggregation: "sum" }] }), ["柱线双轴图需要两个不同单位的指标，且不支持系列拆分"]);
   const invalid = { ...defaultChartDraft(), chartType: "pie", measures: [{ field: "rows", aggregation: "count" }, { field: "lines", aggregation: "sum" }] };
   assert.deepEqual(validateChartDraft(invalid), ["饼图和环形图只能使用一个指标"]);
   assert.throws(() => parseChartDraft(invalid), /只能使用一个指标/);
   assert.throws(() => parseChartDraft({ ...defaultChartDraft(), chartType: "javascript" }), /不支持的图表类型/);
   assert.throws(() => parseChartDraft({ ...defaultChartDraft(), dimension: { field: "contactLandlineMasked" } }), /不支持的图表维度/);
   assert.equal(JSON.stringify(parsed).includes("javascript"), false);
+});
+
+test("system mixed-unit charts opt in to the explicit combo type", () => {
+  assert.equal(DEFAULT_CHART_TEMPLATES.find((template) => template.id === "system-provider-ranking")?.chartType, "combo");
+  assert.equal(DEFAULT_CHART_TEMPLATES.find((template) => template.id === "system-service-ranking")?.chartType, "combo");
 });
 
 test("legacy templates migrate to scrollable full-category charts", () => {

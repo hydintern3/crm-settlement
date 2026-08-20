@@ -79,10 +79,10 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
       series: [{ name: `${x.name} / ${y.name}`, type: "scatter", symbolSize: 12, label: { show: template.options.showLabels, position: "top", formatter: (params: unknown) => { const item = params as { name?: string; value?: unknown[] }; return `${item.name ?? ""}: ${formatDataValue(item.value?.[0])} / ${formatDataValue(item.value?.[1])}`; } }, data: data.categories.map((name, index) => ({ name, value: [x.values[index], y.values[index]] })) }],
     };
   } else {
-    const horizontal = template.options.orientation === "horizontal" && (template.chartType === "bar" || template.chartType === "stackedBar");
+    const horizontal = template.options.orientation === "horizontal" && (template.chartType === "bar" || template.chartType === "combo" || template.chartType === "stackedBar");
     const categoryAxis = { type: "category" as const, data: data.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: "#dfe5ed" } }, axisLabel: { ...axisText, rotate: horizontal ? 0 : data.categories.length > 10 ? 30 : 0, width: horizontal ? 90 : undefined, overflow: "truncate" as const } };
     const measureUnits = template.measures.map((measure) => measureDefinition(measure.field).unit);
-    const showDualAxis = !template.seriesField && template.chartType === "bar" && template.measures.length === 2 && measureUnits[0] !== measureUnits[1];
+    const showDualAxis = template.chartType === "combo";
     const valueAxis = (name?: string, secondary = false) => ({ type: "value" as const, name, position: secondary ? (horizontal ? "top" : "right") : undefined, splitLine: secondary ? { show: false } : { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText });
     const isLine = template.chartType === "line" || template.chartType === "area";
     const hasOverflow = data.categories.length > template.options.topN;

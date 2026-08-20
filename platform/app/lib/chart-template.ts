@@ -1,10 +1,10 @@
 import type { BusinessRow } from "./data-model";
 
-export const CHART_SCHEMA_VERSION = 7;
+export const CHART_SCHEMA_VERSION = 8;
 export const MAX_DASHBOARD_TEMPLATES = 30;
 export const DEFAULT_CHART_TOP_N = 50;
 
-export type ChartType = "bar" | "line" | "area" | "pie" | "donut" | "stackedBar" | "scatter";
+export type ChartType = "bar" | "combo" | "line" | "area" | "pie" | "donut" | "stackedBar" | "scatter";
 export type ChartSize = "half" | "wide";
 export type TimeGranularity = "year" | "quarter" | "month" | "day";
 export type DimensionField = "completedDate" | "businessEvent" | "businessType" | "businessName" | "owner" | "provider" | "serviceCode" | "serviceName" | "serviceCodeII" | "serviceNameII" | "activeStatus" | "meteringRule" | "paymentCycle" | "providerCategory" | "calculationStatus" | "installmentCalculationFlag" | "removalType";
@@ -100,7 +100,7 @@ export const AGGREGATION_LABELS: Record<Aggregation, string> = {
 };
 
 export const CHART_TYPE_LABELS: Record<ChartType, string> = {
-  bar: "柱状图", line: "折线图", area: "面积图", pie: "饼图", donut: "环形图", stackedBar: "堆叠柱状图", scatter: "散点图",
+  bar: "柱状图", combo: "柱线双轴图", line: "折线图", area: "面积图", pie: "饼图", donut: "环形图", stackedBar: "堆叠柱状图", scatter: "散点图",
 };
 
 const chartTypes = new Set<ChartType>(Object.keys(CHART_TYPE_LABELS) as ChartType[]);
@@ -212,6 +212,7 @@ export function validateChartDraft(draft: ChartTemplateDraft) {
   if (draft.seriesField && draft.measures.length !== 1) issues.push("使用系列拆分时只能选择一个指标");
   if ((draft.chartType === "pie" || draft.chartType === "donut" || draft.chartType === "scatter") && draft.seriesField) issues.push("当前图表类型不支持系列拆分");
   if (draft.chartType === "scatter" && draft.measures.length !== 2) issues.push("散点图需要两个指标作为 X、Y 轴");
+  if (draft.chartType === "combo" && (draft.seriesField || draft.measures.length !== 2 || measureDefinition(draft.measures[0].field).unit === measureDefinition(draft.measures[1].field).unit)) issues.push("柱线双轴图需要两个不同单位的指标，且不支持系列拆分");
   if (draft.chartType === "stackedBar" && !draft.seriesField && draft.measures.length < 2) issues.push("堆叠柱状图需要系列拆分或至少两个指标");
   if (draft.measures.some((measure) => !measureFields.get(measure.field)?.aggregations.includes(measure.aggregation))) issues.push("指标和聚合方式不兼容");
   return issues;
@@ -226,8 +227,8 @@ export const DEFAULT_CHART_TEMPLATES: readonly ChartTemplate[] = [
   systemTemplate("system-monthly-metering", { ...defaultChartDraft(10), title: "月平均计量趋势", description: "按有效完工月份汇总月平均计量", chartType: "bar", dimension: { field: "completedDate", timeGranularity: "month" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, sort: "dimensionAsc", size: "wide" } }),
   systemTemplate("system-metering-rule", { ...defaultChartDraft(20), title: "计量规则分布", description: "新增量、新量、存量和超期记录结构", chartType: "donut", dimension: { field: "meteringRule" }, measures: [{ field: "rows", aggregation: "count" }] }),
   systemTemplate("system-owner-ranking", { ...defaultChartDraft(30), title: "负责人业绩", description: "负责人月平均计量 Top 50", dimension: { field: "owner" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "供应商分布", description: "按供应商汇总线路数与月平均计量，可滚动查看全部分类", dimension: { field: "provider" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "bar", dimension: { field: "serviceCode" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal", size: "wide", height: 420, showLabels: false, smooth: false } }),
+  systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "供应商分布", description: "按供应商汇总线路数与月平均计量，可滚动查看全部分类", chartType: "combo", dimension: { field: "provider" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
+  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "combo", dimension: { field: "serviceCode" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal", size: "wide", height: 420, showLabels: false, smooth: false } }),
 ] as const;
 
 export function templateDraft(template: ChartTemplate): ChartTemplateDraft {
