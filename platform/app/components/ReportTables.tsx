@@ -34,6 +34,31 @@ const knownSum = (values: NumericValue[]): NumericValue => {
 };
 const lineCount = (row: BusinessRow) => row.lines ?? 1;
 
+function buildAnnualAuditRows(rows: BusinessRow[], year?: string) {
+  const duplicateDevices = new Map<string, number>();
+  for (const row of rows) if (row.deviceCode) duplicateDevices.set(row.deviceCode, (duplicateDevices.get(row.deviceCode) ?? 0) + 1);
+  return rows.flatMap((row, index) => {
+    const issues: string[] = [];
+    const rawYear = row.rawCompletedDate.slice(0, 4);
+    if (!row.rawCompletedDate) issues.push("完工日期为空");
+    if (row.initialCompletedDate && row.rawCompletedDate && row.initialCompletedDate !== row.rawCompletedDate) issues.push("初始完工日期与完工日期不一致");
+    if (row.businessEvent === "拆机" && year && rawYear !== year) issues.push("业务属性为拆机但不在统计年度");
+    if (year && rawYear === year && row.businessEvent === "待确认") issues.push("完工日期在统计年度但业务属性待确认");
+    if (row.deviceCode && (duplicateDevices.get(row.deviceCode) ?? 0) > 1) issues.push("设备编号重复");
+    if (row.monthlyMetering === null) issues.push("月平均计量为空");
+    if (!issues.length) return [];
+    return [{
+      key: `${row.deviceCode || "blank"}-${index}`,
+      deviceCode: row.deviceCode || "--",
+      businessEvent: row.businessEvent || "待确认",
+      rawDate: row.rawCompletedDate || "--",
+      initialDate: row.initialCompletedDate || "--",
+      metering: money(row.monthlyMetering),
+      issues: issues.join("；"),
+    }];
+  });
+}
+
 function ReportPanel({ label, title, description, status = "ready", children, wide = false }: {
   label: string;
   title: string;
@@ -115,8 +140,9 @@ function UnavailableTable({ columns, missing, note }: { columns: string[]; missi
     <div className="missing-fields report-missing">{missing.map((field) => <span key={field}>{field}</span>)}</div></>;
 }
 
-export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
-  const monthlyData = buildMonthlyBusiness(rows);
+export function BusinessReportTables({ rows, year }: { rows: BusinessRow[]; year?: string }) {
+  const monthlyYear = year || [...new Set(rows.map((row) => row.rawCompletedDate.slice(0, 4)).filter((value) => /^\d{4}$/.test(value)))].sort().at(-1);
+  const monthlyData = buildMonthlyBusiness(rows, monthlyYear);
   const monthly = monthlyData.map((item) => ({
     key: item.month,
     month: item.month,
@@ -160,8 +186,9 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
     key: "summary", month: "总计 / 总览", lines: number(cohortLines), activeLines: number(cohortActive), removalLines: number(cohortData.reduce((sum, item) => sum + item.removalLines, 0)),
     activeRate: percent(cohortLines ? cohortActive / cohortLines * 100 : null), amount: money(knownSum(cohortData.map((item) => item.monthlyMetering))), activeAmount: money(knownSum(cohortData.map((item) => item.activeMonthlyMetering))),
   };
+  const auditRows = buildAnnualAuditRows(rows, monthlyYear);
   return <section className="module-grid report-module-grid">
-    <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description="按源表完工日期分月；新装和当年拆机均要求业务属性与完工日期属于对应月份/年度。目标与历史时点活跃口径尚未提供，保持 --。">
+    <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description={`统计年度：${monthlyYear || "--"}；月份字段：源表完工日期；新装/当年拆机按业务属性统计。当前活跃为当前状态，不代表历史月末状态。`}>
       <ReportTable columns={[
         { key: "month", label: "月份" }, { key: "installs", label: "新装线数", numeric: true }, { key: "installAmount", label: "新装月平均计量", numeric: true },
         { key: "removals", label: "当年拆机线数", numeric: true }, { key: "removalAmount", label: "拆机月平均计量", numeric: true }, { key: "activeLines", label: "当前活跃线数", numeric: true },
@@ -176,6 +203,9 @@ export function BusinessReportTables({ rows }: { rows: BusinessRow[] }) {
         { key: "removalLines", label: "拆机线数", numeric: true }, { key: "activeRate", label: "当前活跃率", numeric: true },
         { key: "amount", label: "月平均计量", numeric: true }, { key: "activeAmount", label: "活跃月平均计量", numeric: true },
       ]} rows={cohorts} summary={cohortSummary} />
+    </ReportPanel>
+    <ReportPanel wide label="ANNUAL RECONCILIATION" title="年度拆装异常对账" status={auditRows.length ? "partial" : "ready"} description="仅列出需要人工复核的记录，不修改源数据。检查完工日期完整性、日期差异、年度归属、业务属性、设备唯一键和月平均计量。">
+      <ReportTable columns={[{ key: "deviceCode", label: "设备编号" }, { key: "businessEvent", label: "业务属性（平台）" }, { key: "rawDate", label: "完工日期（CRM）" }, { key: "initialDate", label: "初始完工日期" }, { key: "metering", label: "月平均计量", numeric: true }, { key: "issues", label: "异常项" }]} rows={auditRows} emptyText="当前年度没有发现需人工复核的拆装异常" />
     </ReportPanel>
   </section>;
 }
@@ -255,13 +285,14 @@ export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {
     key: item.key, serviceCode: item.serviceCode, serviceName: item.serviceName, serviceCodeII: item.serviceCodeII, serviceNameII: item.serviceNameII,
     records: number(item.records), lines: number(item.lines), newVolumeRecords: number(item.newVolumeRecords), newVolumeAmount: money(item.newVolumeAmount), stockRecords: number(item.stockRecords), stockAmount: money(item.stockAmount), monthlyMetering: money(item.monthlyMetering),
   }));
-  const policyDistribution = buildServicePolicyDistribution(rows).map((item) => ({
+  const policyDistributionRaw = buildServicePolicyDistribution(rows);
+  const policyDistribution = policyDistributionRaw.map((item) => ({
     key: item.key, policy: item.policy, belowAuthorizedPrice: item.belowAuthorizedPrice,
     serviceOneRecords: number(item.serviceOneRecords), serviceTwoRecords: number(item.serviceTwoRecords), totalServiceRecords: number(item.totalServiceRecords),
     serviceOneLines: number(item.serviceOneLines), serviceTwoLines: number(item.serviceTwoLines), totalServiceLines: number(item.totalServiceLines),
     serviceOneAmount: money(item.serviceOneAmount), serviceTwoAmount: money(item.serviceTwoAmount), totalServiceAmount: money(item.totalServiceAmount),
   }));
-  const policySummaryRaw = buildServicePolicyDistribution(rows);
+  const policySummaryRaw = policyDistributionRaw;
   const policySummary = policySummaryRaw.length ? {
     key: "summary", policy: "总计 / 总览", belowAuthorizedPrice: "--",
     serviceOneRecords: number(policySummaryRaw.reduce((sum, item) => sum + item.serviceOneRecords, 0)), serviceTwoRecords: number(policySummaryRaw.reduce((sum, item) => sum + item.serviceTwoRecords, 0)), totalServiceRecords: number(policySummaryRaw.reduce((sum, item) => sum + item.totalServiceRecords, 0)),

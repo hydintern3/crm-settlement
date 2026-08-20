@@ -448,7 +448,7 @@ export function buildServicePolicyDistribution(rows: BusinessRow[]): ServicePoli
 }
 
 function needsReview(row: BusinessRow) {
-  return !row.meteringRule || row.monthlyMetering === null || /年付|两年付/.test(row.businessName);
+  return isSettlementReviewCandidate(row);
 }
 
 function buildRanking(rows: BusinessRow[], field: "owner" | "provider" | "service" | "service2"): RankedItem[] {

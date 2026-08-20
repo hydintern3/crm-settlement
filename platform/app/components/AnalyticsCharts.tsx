@@ -131,3 +131,28 @@ export function RankingChart({ items, onSelect }: { items: RankedItem[]; onSelec
   };
   return <Chart option={option} onSelect={onSelect} height={300} />;
 }
+
+export function DistributionChart({ items, onSelect }: { items: RankedItem[]; onSelect?: (name: string) => void }) {
+  const data = items.filter((item) => item.amount !== null || item.lines > 0).slice(0, 12);
+  if (!data.length) return <EmptyChart />;
+  const option: EChartsCoreOption = {
+    animationDuration: 500,
+    color: ["#2764e7", "#cb5a69"],
+    textStyle: { fontFamily: CHART_FONT, fontSize: 12, color: "#526176" },
+    grid: { left: 52, right: 58, top: 40, bottom: data.length > 8 ? 66 : 42 },
+    legend: { top: 0, textStyle: axisText },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, formatter: (params: unknown) => {
+      if (!Array.isArray(params)) return "--";
+      const first = params[0] as { axisValue?: string };
+      return [`${first.axisValue ?? "--"}`, ...params.map((item) => { const point = item as { seriesName?: string; value?: unknown }; return `${point.seriesName ?? "--"}: ${formatValue(point.value, point.seriesName === "线路数" ? "线" : "元")}`; })].join("<br/>");
+    } },
+    xAxis: { type: "category", data: data.map((item) => item.label), axisTick: { show: false }, axisLine: { lineStyle: { color: "#dfe5ed" } }, axisLabel: { ...axisText, rotate: data.length > 8 ? 30 : 0, width: 90, overflow: "truncate" } },
+    yAxis: [{ type: "value", name: "线路数", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText }, { type: "value", name: "元", splitLine: { show: false }, axisLabel: axisText }],
+    dataZoom: data.length > 10 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
+    series: [
+      { name: "线路数", type: "bar", yAxisIndex: 0, barMaxWidth: 26, label: { show: true, position: "top", formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "线") }, data: data.map((item) => item.lines), itemStyle: { borderRadius: [4, 4, 0, 0] } },
+      { name: "月平均计量", type: "line", yAxisIndex: 1, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatValue((params as { value?: unknown }).value, "元") }, data: data.map((item) => item.amount) },
+    ],
+  };
+  return <Chart option={option} onSelect={onSelect} height={340} />;
+}
