@@ -8,7 +8,7 @@ import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } f
 import { SVGRenderer } from "echarts/renderers";
 import type { RankedItem, Snapshot } from "../lib/data-model";
 import type { AggregatedChartData } from "../lib/chart-aggregation";
-import type { ChartTemplateDraft } from "../lib/chart-template";
+import { measureDefinition, type ChartTemplateDraft } from "../lib/chart-template";
 import { formatChartNumber } from "../lib/formatting";
 
 echarts.use([BarChart, LineChart, PieChart, ScatterChart, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent, SVGRenderer]);
@@ -81,7 +81,9 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
   } else {
     const horizontal = template.options.orientation === "horizontal" && (template.chartType === "bar" || template.chartType === "stackedBar");
     const categoryAxis = { type: "category" as const, data: data.categories, axisTick: { show: false }, axisLine: { lineStyle: { color: "#dfe5ed" } }, axisLabel: { ...axisText, rotate: horizontal ? 0 : data.categories.length > 10 ? 30 : 0, width: horizontal ? 90 : undefined, overflow: "truncate" as const } };
-    const valueAxis = { type: "value" as const, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText };
+    const measureUnits = template.measures.map((measure) => measureDefinition(measure.field).unit);
+    const showDualAxis = !template.seriesField && template.chartType === "bar" && template.measures.length === 2 && measureUnits[0] !== measureUnits[1];
+    const valueAxis = (name?: string, secondary = false) => ({ type: "value" as const, name, position: secondary ? (horizontal ? "top" : "right") : undefined, splitLine: secondary ? { show: false } : { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText });
     const isLine = template.chartType === "line" || template.chartType === "area";
     const hasOverflow = data.categories.length > template.options.topN;
     const zoom = hasOverflow
@@ -91,11 +93,11 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
       : undefined;
     option = {
       ...base,
-      grid: { left: horizontal ? 105 : 58, right: horizontal && hasOverflow ? 38 : 26, top: template.options.showLegend ? 48 : 24, bottom: hasOverflow || (data.categories.length > 10 && !horizontal) ? 66 : 42 },
-      xAxis: horizontal ? valueAxis : categoryAxis,
-      yAxis: horizontal ? categoryAxis : valueAxis,
+      grid: { left: horizontal ? 105 : 58, right: horizontal ? Math.max(horizontal && hasOverflow ? 46 : 34, showDualAxis ? 56 : 0) : showDualAxis ? 58 : 26, top: template.options.showLegend ? 48 : 24, bottom: hasOverflow || (data.categories.length > 10 && !horizontal) ? 66 : 42 },
+      xAxis: horizontal ? (showDualAxis ? [valueAxis(measureUnits[0]), valueAxis(measureUnits[1], true)] : valueAxis(data.unit)) : categoryAxis,
+      yAxis: horizontal ? categoryAxis : (showDualAxis ? [valueAxis(measureUnits[0]), valueAxis(measureUnits[1], true)] : valueAxis(data.unit)),
       dataZoom: zoom,
-      series: data.series.map((series) => isLine ? ({ name: series.name, type: "line", smooth: template.options.smooth, connectNulls: false, areaStyle: template.chartType === "area" ? { opacity: .14 } : undefined, label: { show: template.options.showLabels, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, data: series.values }) : ({ name: series.name, type: "bar", stack: template.chartType === "stackedBar" ? "total" : undefined, barMaxWidth: 30, label: { show: template.options.showLabels, position: horizontal ? "right" : "top", formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] }, data: series.values })),
+      series: data.series.map((series, index) => (isLine || (showDualAxis && index === 1)) ? ({ name: series.name, type: "line", [horizontal ? "xAxisIndex" : "yAxisIndex"]: showDualAxis ? index : 0, smooth: template.options.smooth, connectNulls: false, symbolSize: 7, areaStyle: template.chartType === "area" ? { opacity: .14 } : undefined, label: { show: template.options.showLabels, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, data: series.values }) : ({ name: series.name, type: "bar", [horizontal ? "xAxisIndex" : "yAxisIndex"]: 0, stack: template.chartType === "stackedBar" ? "total" : undefined, barMaxWidth: 30, label: { show: template.options.showLabels, position: horizontal ? "right" : "top", formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] }, data: series.values })),
     };
   }
   return <Chart option={option} onSelect={onSelect} height={template.options.height} />;

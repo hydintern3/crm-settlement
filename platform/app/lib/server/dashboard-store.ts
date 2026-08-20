@@ -37,8 +37,8 @@ async function readDashboard(): Promise<DashboardFile> {
       const migrated = migrateChartDraft(parseChartDraft(template), sourceSchemaVersion);
       const corrected = template.id === "system-provider-ranking" && sourceSchemaVersion < 3
         ? { ...migrated, title: "供应商分布", description: "按供应商汇总线路数与月平均计量 Top 50", dimension: { field: "provider" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }] }
-        : template.id === "system-service-ranking" && sourceSchemaVersion < 6
-          ? { ...migrated, title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "line" as const, dimension: { field: "serviceCode" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }], options: { ...migrated.options, topN: 12, showLabels: false, showOther: false, size: "wide" as const, height: 380, smooth: true } }
+        : template.id === "system-service-ranking" && sourceSchemaVersion < 7
+          ? { ...migrated, title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "bar" as const, dimension: { field: "serviceCode" as const }, measures: [{ field: "lines" as const, aggregation: "sum" as const }, { field: "monthlyMetering" as const, aggregation: "sum" as const }], options: { ...migrated.options, topN: 12, orientation: "horizontal" as const, showLabels: false, showOther: false, size: "wide" as const, height: 420, smooth: false } }
           : migrated;
       return {
         ...template,

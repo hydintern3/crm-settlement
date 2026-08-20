@@ -1,6 +1,6 @@
 import type { BusinessRow } from "./data-model";
 
-export const CHART_SCHEMA_VERSION = 6;
+export const CHART_SCHEMA_VERSION = 7;
 export const MAX_DASHBOARD_TEMPLATES = 30;
 export const DEFAULT_CHART_TOP_N = 50;
 
@@ -227,7 +227,7 @@ export const DEFAULT_CHART_TEMPLATES: readonly ChartTemplate[] = [
   systemTemplate("system-metering-rule", { ...defaultChartDraft(20), title: "计量规则分布", description: "新增量、新量、存量和超期记录结构", chartType: "donut", dimension: { field: "meteringRule" }, measures: [{ field: "rows", aggregation: "count" }] }),
   systemTemplate("system-owner-ranking", { ...defaultChartDraft(30), title: "负责人业绩", description: "负责人月平均计量 Top 50", dimension: { field: "owner" }, measures: [{ field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
   systemTemplate("system-provider-ranking", { ...defaultChartDraft(40), title: "供应商分布", description: "按供应商汇总线路数与月平均计量，可滚动查看全部分类", dimension: { field: "provider" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal" } }),
-  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "line", dimension: { field: "serviceCode" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "vertical", size: "wide", height: 380, showLabels: false, smooth: true } }),
+  systemTemplate("system-service-ranking", { ...defaultChartDraft(50), title: "服务商分布", description: "按 I 服务编号汇总线路数与月平均计量，可滚动查看全部分类", chartType: "bar", dimension: { field: "serviceCode" }, measures: [{ field: "lines", aggregation: "sum" }, { field: "monthlyMetering", aggregation: "sum" }], options: { ...defaultChartDraft().options, orientation: "horizontal", size: "wide", height: 420, showLabels: false, smooth: false } }),
 ] as const;
 
 export function templateDraft(template: ChartTemplate): ChartTemplateDraft {
