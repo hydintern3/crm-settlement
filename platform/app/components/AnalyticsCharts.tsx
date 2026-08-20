@@ -103,18 +103,27 @@ export function ConfigurableChart({ data, template, onSelect }: { data: Aggregat
 
 export function MonthlyChart({ data }: { data: Snapshot["monthly"] }) {
   if (!data.length || data.every((item) => item.amount === null)) return <EmptyChart />;
+  const amounts = data.flatMap((item) => [item.amount, item.tariff]).filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  const minimumAmount = amounts.length ? Math.min(...amounts) : 0;
+  const maximumAmount = amounts.length ? Math.max(...amounts) : 0;
+  // Only truncate when the values occupy a relatively narrow band well above zero.
+  // This keeps ordinary charts honest while making small month-to-month changes readable.
+  const shouldTruncateAmountAxis = minimumAmount > 0 && maximumAmount > 0 && minimumAmount / maximumAmount >= 0.45 && (maximumAmount - minimumAmount) / maximumAmount <= 0.55;
+  const truncationStep = minimumAmount > 0 ? 10 ** Math.max(0, Math.floor(Math.log10(minimumAmount)) - 1) : 1;
+  const amountAxisMin = shouldTruncateAmountAxis ? Math.max(1, Math.floor((minimumAmount * 0.88) / truncationStep) * truncationStep) : 0;
+  const amountAxisName = shouldTruncateAmountAxis ? `金额（截断，起点 ${amountAxisMin.toLocaleString("zh-CN")} 元）` : "金额（元）";
   const option: EChartsCoreOption = {
     animationDuration: 500,
     color: ["#2764e7", "#cb5a69"],
     textStyle: { fontFamily: CHART_FONT, fontSize: 12, color: "#526176" },
-    grid: { left: 48, right: 18, top: 34, bottom: 42 },
+    grid: { left: shouldTruncateAmountAxis ? 78 : 48, right: 28, top: 38, bottom: 48 },
     tooltip: { trigger: "axis", textStyle: { fontFamily: CHART_FONT, fontSize: 12 }, formatter: (params: unknown) => (Array.isArray(params) ? params.map((item) => { const point = item as { seriesName?: string; value?: unknown; axisValue?: string }; const unit = point.seriesName === "线路数" ? "线" : "元"; return `${point.seriesName ?? "--"}: ${formatValue(point.value, unit)}`; }).join("<br/>") : "--") },
     xAxis: { type: "category", data: data.map((item) => item.month.includes("-") ? item.month : `${item.month}月`), axisLine: { lineStyle: { color: "#dfe5ed" } }, axisTick: { show: false }, axisLabel: { ...axisText, rotate: data.length > 8 ? 30 : 0 } },
-    yAxis: [{ type: "value", name: "元", splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText }, { type: "value", name: "线路数", splitLine: { show: false }, axisLabel: axisText }],
+    yAxis: [{ type: "value", name: amountAxisName, min: amountAxisMin, splitLine: { lineStyle: { color: "#edf1f5" } }, axisLabel: axisText }, { type: "value", name: "线路数", min: 0, splitLine: { show: false }, axisLabel: axisText }],
     dataZoom: data.length > 8 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 2 }] : undefined,
     series: [{ name: "月平均计量", type: "line", yAxisIndex: 0, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, data: data.map((item) => item.amount) }, { name: "月平均资费", type: "line", yAxisIndex: 0, smooth: true, symbolSize: 7, label: { show: true, formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, data: data.map((item) => item.tariff) }, { name: "线路数", type: "bar", yAxisIndex: 1, barMaxWidth: 18, label: { show: true, position: "top", formatter: (params: unknown) => formatDataValue((params as { value?: unknown }).value) }, labelLayout: { hideOverlap: false }, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: data.map((item) => item.lines) }],
   };
-  return <Chart option={option} />;
+  return <><Chart option={option} height={430} />{shouldTruncateAmountAxis ? <p className="chart-axis-note">金额轴已截断至 {amountAxisMin.toLocaleString("zh-CN")} 元，悬浮查看完整金额；线路数仍使用独立纵轴。</p> : null}</>;
 }
 
 export function RuleChart({ data, onSelect }: { data: Snapshot["meteringRules"]; onSelect?: (name: string) => void }) {
