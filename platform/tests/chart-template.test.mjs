@@ -80,9 +80,9 @@ test("template parser constrains unsafe and incompatible configurations", () => 
   assert.equal(JSON.stringify(parsed).includes("javascript"), false);
 });
 
-test("system mixed-unit charts opt in to the explicit combo type", () => {
-  assert.equal(DEFAULT_CHART_TEMPLATES.find((template) => template.id === "system-provider-ranking")?.chartType, "combo");
-  assert.equal(DEFAULT_CHART_TEMPLATES.find((template) => template.id === "system-service-ranking")?.chartType, "combo");
+test("supplier and service distributions use grouped dual-axis bars", () => {
+  assert.equal(DEFAULT_CHART_TEMPLATES.find((template) => template.id === "system-provider-ranking")?.chartType, "bar");
+  assert.equal(DEFAULT_CHART_TEMPLATES.find((template) => template.id === "system-service-ranking")?.chartType, "bar");
 });
 
 test("legacy templates migrate to scrollable full-category charts", () => {
