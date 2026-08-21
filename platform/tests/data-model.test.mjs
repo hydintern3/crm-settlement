@@ -82,6 +82,18 @@ test("double-line assessment uses monthly metering with 2,000 yuan increments an
   assert.equal(result.convertedPendingLines, 18);
 });
 
+test("double-line assessment applies the period to additions by initial completion and removals by CRM completion", () => {
+  const rows = [
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 初始完工日期: "2026-01-20", 完工日期: "2026-04-20", 线数: "2", 月平均计量: "10000" }),
+    toBusinessRow({ 业务属性: "拆机", 计量规则: "新增量", 初始完工日期: "2025-12-20", 完工日期: "2026-02-20", 线数: "3", 月平均计量: "12000" }),
+  ];
+  const result = buildDoubleLineAssessment(rows, 0.75, { start: "2026-01-01", end: "2026-03-31" });
+  assert.equal(result.installLines, 2);
+  assert.equal(result.removalLines, 3);
+  assert.equal(result.installConvertedLines, 1);
+  assert.equal(result.removalConvertedLines, 2);
+});
+
 test("service combinations preserve single-sided records and policy distribution counts I and II service sides", () => {
   const rows = [
     toBusinessRow({ 设备编号: "D-1", I服务编号: "I-1", II服务编号: "II-1", 计量规则: "新量", 是否低于授权价: "是", 线数: "2", 月平均计量: "100" }),
@@ -129,7 +141,7 @@ test("annual addition reconciliation counts all 2026 initial completions and sep
     toBusinessRow({ 设备编号: "D-7", 负责人: "甲", 初始完工日期: "2025-12-31", 完工日期: "2026-01-09", 业务属性: "新装", 活跃状态: "活跃", 线数: "8", 月平均计量: "700" }),
   ];
   const result = buildAnnualAdditionReconciliation(rows, "2026", "owner");
-  assert.deepEqual(result, [{ key: "甲", label: "甲", records: 6, lines: 27, monthlyMetering: 2100, activeLines: 2, sameYearRemovalLines: 3, laterRemovalLines: 4, removalDateMissingLines: 5, inactiveNotRemovalLines: 6, statusMissingLines: 7, reconciledLines: 27, unreconciledLines: 0 }]);
+  assert.deepEqual(result, [{ key: "甲", label: "甲", records: 6, lines: 27, monthlyMetering: 2100, monthlyTariff: null, activeLines: 2, activeMonthlyMetering: 100, activeMonthlyTariff: null, nonActiveLines: 25, nonActiveMonthlyMetering: 2000, nonActiveMonthlyTariff: null, sameYearRemovalLines: 3, laterRemovalLines: 4, removalDateMissingLines: 5, inactiveNotRemovalLines: 6, statusMissingLines: 7, reconciledLines: 27, unreconciledLines: 0 }]);
 });
 
 test("sales net growth uses 2026 additions and keeps same-year and annual removals separate", () => {
@@ -140,7 +152,15 @@ test("sales net growth uses 2026 additions and keeps same-year and annual remova
     toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "存量", 初始完工日期: "2024-01-01", 完工日期: "2026-05-06", 线数: "4", 月平均计量: "400" }),
     toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "新增量", 初始完工日期: "2026-03-01", 完工日期: "2025-06-06", 线数: "5", 月平均计量: "500" }),
   ];
-  assert.deepEqual(buildSalesNetGrowth(rows), [{ owner: "销售甲", additions: 9, additionAmount: 900, sameYearRemovals: 1, sameYearRemovalAmount: 100, netLines: 8, netAmount: 800, annualRemovals: 5, annualRemovalAmount: 500, sameYearRemovalRate: 100 / 9 }]);
+  assert.deepEqual(buildSalesNetGrowth(rows), [{ businessCategory: "未采集", owner: "销售甲", additions: 9, additionAmount: 900, sameYearRemovals: 1, sameYearRemovalAmount: 100, netLines: 8, netAmount: 800, annualRemovals: 5, annualRemovalAmount: 500, sameYearRemovalRate: 100 / 9 }]);
+});
+
+test("sales net growth keeps business categories separate for the same owner", () => {
+  const rows = [
+    toBusinessRow({ 负责人: "销售甲", 业务类别: "商宽", 计量规则: "新增量", 线数: "2", 月平均计量: "200" }),
+    toBusinessRow({ 负责人: "销售甲", 业务类别: "专线", 计量规则: "新增量", 线数: "3", 月平均计量: "300" }),
+  ];
+  assert.deepEqual(buildSalesNetGrowth(rows).map((item) => [item.businessCategory, item.owner, item.additions]), [["专线", "销售甲", 3], ["商宽", "销售甲", 2]]);
 });
 
 test("partial CRM rows remain available while settlement review reasons stay explicit", () => {

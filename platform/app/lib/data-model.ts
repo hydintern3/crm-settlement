@@ -136,6 +136,7 @@ export type NetGrowthRow = {
 };
 
 export type SalesNetGrowthRow = {
+  businessCategory: string;
   owner: string;
   additions: number;
   additionAmount: NumericValue;
@@ -154,7 +155,13 @@ export type AnnualAdditionReconciliationRow = {
   records: number;
   lines: number;
   monthlyMetering: NumericValue;
+  monthlyTariff: NumericValue;
   activeLines: number;
+  activeMonthlyMetering: NumericValue;
+  activeMonthlyTariff: NumericValue;
+  nonActiveLines: number;
+  nonActiveMonthlyMetering: NumericValue;
+  nonActiveMonthlyTariff: NumericValue;
   sameYearRemovalLines: number;
   laterRemovalLines: number;
   removalDateMissingLines: number;
@@ -529,9 +536,10 @@ export function convertedLineCount(row: BusinessRow) {
   return Math.min(20, 1 + Math.floor((metering - 10_000) / 2_000));
 }
 
-export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75): DoubleLineAssessment {
-  const installs = rows.filter(isNewVolume);
-  const removals = rows.filter(isRemoval);
+export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75, period?: { start: string; end: string }): DoubleLineAssessment {
+  const inPeriod = (date: string) => !period || Boolean(date && date >= period.start && date <= period.end);
+  const installs = rows.filter((row) => isNewVolume(row) && inPeriod(row.initialCompletedDate));
+  const removals = rows.filter((row) => isRemoval(row) && inPeriod(row.rawCompletedDate));
   const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
   const installConvertibleRecords = installs.filter((row) => convertedLineCount(row) > 0).length;
   const installConvertedLines = installs.reduce((sum, row) => sum + convertedLineCount(row), 0);
@@ -732,9 +740,17 @@ export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
 
 export function buildSalesNetGrowth(rows: BusinessRow[], year = "2026"): SalesNetGrowthRow[] {
   const isAnnualAddition = (row: BusinessRow) => row.meteringRule === "新增量";
-  const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
-  return owners.map((owner) => {
-    const group = rows.filter((row) => row.owner === owner);
+  const groups = new Map<string, { businessCategory: string; owner: string; rows: BusinessRow[] }>();
+  for (const row of rows) {
+    if (!row.owner) continue;
+    const businessCategory = row.businessCategory || "未采集";
+    const owner = row.owner;
+    const key = `${businessCategory}\u0000${owner}`;
+    const item = groups.get(key) ?? { businessCategory, owner, rows: [] };
+    item.rows.push(row);
+    groups.set(key, item);
+  }
+  return [...groups.values()].map(({ businessCategory, owner, rows: group }) => {
     const additions = group.filter(isAnnualAddition);
     const sameYearRemovals = group.filter((row) => isAnnualAddition(row) && isAnnualRemoval(row, year));
     const annualRemovals = group.filter((row) => isAnnualRemoval(row, year));
@@ -744,6 +760,7 @@ export function buildSalesNetGrowth(rows: BusinessRow[], year = "2026"): SalesNe
     const additionAmount = sumKnown(additions.map((row) => row.monthlyMetering));
     const sameYearRemovalAmount = sumKnown(sameYearRemovals.map((row) => row.monthlyMetering));
     return {
+      businessCategory,
       owner,
       additions: additionLines,
       additionAmount,
@@ -786,7 +803,21 @@ export function buildAnnualAdditionReconciliation(
       records: group.length,
       lines,
       monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
+      monthlyTariff: sumKnown(group.map((row) => row.monthlyTariff)),
       activeLines: active.reduce((sum, row) => sum + lineCount(row), 0),
+      activeMonthlyMetering: sumKnown(active.map((row) => row.monthlyMetering)),
+      activeMonthlyTariff: sumKnown(active.map((row) => row.monthlyTariff)),
+      nonActiveLines: lines - active.reduce((sum, row) => sum + lineCount(row), 0),
+      nonActiveMonthlyMetering: (() => {
+        const total = sumKnown(group.map((row) => row.monthlyMetering));
+        const current = sumKnown(active.map((row) => row.monthlyMetering));
+        return total === null || current === null ? null : total - current;
+      })(),
+      nonActiveMonthlyTariff: (() => {
+        const total = sumKnown(group.map((row) => row.monthlyTariff));
+        const current = sumKnown(active.map((row) => row.monthlyTariff));
+        return total === null || current === null ? null : total - current;
+      })(),
       sameYearRemovalLines: sameYearRemoval.reduce((sum, row) => sum + lineCount(row), 0),
       laterRemovalLines: laterRemoval.reduce((sum, row) => sum + lineCount(row), 0),
       removalDateMissingLines: removalDateMissing.reduce((sum, row) => sum + lineCount(row), 0),
