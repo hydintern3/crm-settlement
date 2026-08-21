@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyDynamicCalculationRules,
   buildAnnualRemovalSummary,
+  buildAnnualAdditionReconciliation,
   buildSalesNetGrowth,
   buildDoubleLineAssessment,
   buildMonthlyBusiness,
@@ -112,6 +113,20 @@ test("2026 annual removal summary only includes removal records with CRM complet
     toBusinessRow({ 设备编号: "D-5", 业务属性: "拆机", 初始完工日期: "2026-04-01", 完工日期: "", 线数: "7", 月平均计量: "700", 优惠资费: "7000" }),
   ];
   assert.deepEqual(buildAnnualRemovalSummary(rows, "2026"), [{ month: "2026-01", records: 2, lines: 3, monthlyMetering: 150, discountedTariff: 22000 }]);
+});
+
+test("annual addition reconciliation counts all 2026 initial completions and separates current status", () => {
+  const rows = [
+    toBusinessRow({ 设备编号: "D-1", 负责人: "甲", 初始完工日期: "2026-01-01", 完工日期: "2026-01-02", 业务属性: "新装", 活跃状态: "活跃", 线数: "2", 月平均计量: "100" }),
+    toBusinessRow({ 设备编号: "D-2", 负责人: "甲", 初始完工日期: "2026-01-03", 完工日期: "2026-02-02", 业务属性: "拆机", 活跃状态: "不活跃", 线数: "3", 月平均计量: "200" }),
+    toBusinessRow({ 设备编号: "D-3", 负责人: "甲", 初始完工日期: "2026-01-04", 完工日期: "2027-01-02", 业务属性: "拆机", 活跃状态: "不活跃", 线数: "4", 月平均计量: "300" }),
+    toBusinessRow({ 设备编号: "D-4", 负责人: "甲", 初始完工日期: "2026-01-05", 完工日期: "", 业务属性: "拆机", 活跃状态: "不活跃", 线数: "5", 月平均计量: "400" }),
+    toBusinessRow({ 设备编号: "D-5", 负责人: "甲", 初始完工日期: "2026-01-06", 完工日期: "2026-01-07", 业务属性: "变更", 活跃状态: "暂停", 线数: "6", 月平均计量: "500" }),
+    toBusinessRow({ 设备编号: "D-6", 负责人: "甲", 初始完工日期: "2026-01-08", 完工日期: "2026-01-09", 业务属性: "新装", 活跃状态: "", 线数: "7", 月平均计量: "600" }),
+    toBusinessRow({ 设备编号: "D-7", 负责人: "甲", 初始完工日期: "2025-12-31", 完工日期: "2026-01-09", 业务属性: "新装", 活跃状态: "活跃", 线数: "8", 月平均计量: "700" }),
+  ];
+  const result = buildAnnualAdditionReconciliation(rows, "2026", "owner");
+  assert.deepEqual(result, [{ key: "甲", label: "甲", records: 6, lines: 27, monthlyMetering: 2100, activeLines: 2, sameYearRemovalLines: 3, laterRemovalLines: 4, removalDateMissingLines: 5, inactiveNotRemovalLines: 6, statusMissingLines: 7, reconciledLines: 27, unreconciledLines: 0 }]);
 });
 
 test("sales net growth uses 2026 additions and keeps same-year and annual removals separate", () => {

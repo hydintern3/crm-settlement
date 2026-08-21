@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import {
   buildBusinessProgress,
   buildAnnualRemovalSummary,
+  buildAnnualAdditionReconciliation,
   buildDoubleLineAssessment,
   buildCompletionCohorts,
   buildDataQualityMetrics,
@@ -264,6 +265,23 @@ export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "additions", label: "新增线数", numeric: true }, { key: "additionAmount", label: "新增业务量", numeric: true }, { key: "sameYearRemovals", label: "当年新增当年拆机线数", numeric: true }, { key: "sameYearRemovalAmount", label: "当年新增当年拆机业务量", numeric: true }, { key: "netLines", label: "净增线数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "annualRemovals", label: "2026 年度拆机线数", numeric: true }, { key: "annualRemovalAmount", label: "2026 年度拆机业务量", numeric: true }, { key: "ratio", label: "当年新增拆机率", numeric: true }]} rows={netGrowth} summary={netSummary} />
     </ReportPanel>
   </section>;
+}
+
+export function AnnualAdditionReconciliation({ rows, year = "2026" }: { rows: BusinessRow[]; year?: string }) {
+  const [dimension, setDimension] = useState<"company" | "owner" | "provider" | "businessName" | "service" | "service2" | "businessCategory" | "month">("company");
+  const dimensions = [["company", "公司总体"], ["owner", "负责人"], ["provider", "供应商"], ["businessName", "业务名称"], ["service", "I服务"], ["service2", "II服务"], ["businessCategory", "业务类别"], ["month", "初始完工月份"]] as const;
+  const data = buildAnnualAdditionReconciliation(rows, year, dimension);
+  const tableRows = data.map((item) => ({
+    key: item.key, label: item.label, records: number(item.records), lines: number(item.lines), amount: money(item.monthlyMetering), active: number(item.activeLines), sameYearRemoval: number(item.sameYearRemovalLines), otherRemoval: number(item.laterRemovalLines), removalDateMissing: number(item.removalDateMissingLines), inactive: number(item.inactiveNotRemovalLines), statusMissing: number(item.statusMissingLines), reconciled: number(item.reconciledLines), unreconciled: number(item.unreconciledLines),
+  }));
+  const totalLines = data.reduce((sum, item) => sum + item.lines, 0);
+  const summary = data.length ? {
+    key: "summary", label: "总计 / 总览", records: number(data.reduce((sum, item) => sum + item.records, 0)), lines: number(totalLines), amount: money(knownSum(data.map((item) => item.monthlyMetering))), active: number(data.reduce((sum, item) => sum + item.activeLines, 0)), sameYearRemoval: number(data.reduce((sum, item) => sum + item.sameYearRemovalLines, 0)), otherRemoval: number(data.reduce((sum, item) => sum + item.laterRemovalLines, 0)), removalDateMissing: number(data.reduce((sum, item) => sum + item.removalDateMissingLines, 0)), inactive: number(data.reduce((sum, item) => sum + item.inactiveNotRemovalLines, 0)), statusMissing: number(data.reduce((sum, item) => sum + item.statusMissingLines, 0)), reconciled: number(data.reduce((sum, item) => sum + item.reconciledLines, 0)), unreconciled: number(data.reduce((sum, item) => sum + item.unreconciledLines, 0)),
+  } : undefined;
+  return <section className="module-grid report-module-grid"><ReportPanel wide label="ANNUAL ADDITION RECONCILIATION" title={`${year} 年度新增复核`} status="partial" description={`新增原始线路数仅按初始完工日期在 ${year} 年统计，不受全局年份、业务属性、计量规则或活跃状态筛选影响。状态分层均在该新增总体内计算；“已分层合计”应等于“新增原始线路数”，差额进入人工复核。`}>
+    <div className="dimension-tabs" role="tablist" aria-label="年度新增复核维度">{dimensions.map(([key, label]) => <button key={key} className={dimension === key ? "active" : ""} onClick={() => setDimension(key)}>{label}</button>)}</div>
+    <ReportTable columns={[{ key: "label", label: "复核维度" }, { key: "records", label: "新增业务数", numeric: true }, { key: "lines", label: "新增原始线路数", numeric: true }, { key: "amount", label: "新增月平均计量", numeric: true }, { key: "active", label: "当前活跃线路数", numeric: true }, { key: "sameYearRemoval", label: "当年新增当年拆机", numeric: true }, { key: "otherRemoval", label: "其他年度拆机", numeric: true }, { key: "removalDateMissing", label: "拆机日期缺失", numeric: true }, { key: "inactive", label: "当前非活跃未拆机", numeric: true }, { key: "statusMissing", label: "活跃状态缺失", numeric: true }, { key: "reconciled", label: "已分层合计", numeric: true }, { key: "unreconciled", label: "待复核差额", numeric: true }]} rows={tableRows} summary={summary} emptyText={`当前版本没有初始完工日期在 ${year} 年的记录`} />
+  </ReportPanel></section>;
 }
 
 export function ProviderReportTables({ rows }: { rows: BusinessRow[] }) {

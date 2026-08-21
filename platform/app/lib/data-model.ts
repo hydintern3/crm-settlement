@@ -148,6 +148,22 @@ export type SalesNetGrowthRow = {
   sameYearRemovalRate: NumericValue;
 };
 
+export type AnnualAdditionReconciliationRow = {
+  key: string;
+  label: string;
+  records: number;
+  lines: number;
+  monthlyMetering: NumericValue;
+  activeLines: number;
+  sameYearRemovalLines: number;
+  laterRemovalLines: number;
+  removalDateMissingLines: number;
+  inactiveNotRemovalLines: number;
+  statusMissingLines: number;
+  reconciledLines: number;
+  unreconciledLines: number;
+};
+
 export type DoubleLineAssessment = {
   target: number;
   installLines: number;
@@ -733,6 +749,46 @@ export function buildSalesNetGrowth(rows: BusinessRow[], year = "2026"): SalesNe
       sameYearRemovalRate: additionLines ? (sameYearRemovalLines / additionLines) * 100 : null,
     };
   }).sort((left, right) => right.netLines - left.netLines || left.owner.localeCompare(right.owner, "zh-CN"));
+}
+
+export function buildAnnualAdditionReconciliation(
+  rows: BusinessRow[],
+  year = "2026",
+  dimension: "company" | "owner" | "provider" | "businessName" | "service" | "service2" | "businessCategory" | "month" = "company",
+): AnnualAdditionReconciliationRow[] {
+  const additions = rows.filter((row) => row.initialCompletedDate.startsWith(`${year}-`));
+  const groups = new Map<string, BusinessRow[]>();
+  for (const row of additions) {
+    const key = (dimension === "company" ? "公司总体" : dimension === "owner" ? row.owner : dimension === "provider" ? row.provider : dimension === "businessName" ? row.businessName : dimension === "service" ? row.serviceCode : dimension === "service2" ? row.serviceCodeII : dimension === "businessCategory" ? row.businessCategory : row.initialCompletedDate.slice(0, 7)) || "未采集";
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.entries()].map(([key, group]) => {
+    const active = group.filter((row) => !isRemoval(row) && isActive(row));
+    const sameYearRemoval = group.filter((row) => isRemoval(row) && row.rawCompletedDate.startsWith(`${year}-`));
+    const laterRemoval = group.filter((row) => isRemoval(row) && row.rawCompletedDate && !row.rawCompletedDate.startsWith(`${year}-`));
+    const removalDateMissing = group.filter((row) => isRemoval(row) && !row.rawCompletedDate);
+    const inactiveNotRemoval = group.filter((row) => !isRemoval(row) && row.activeStatus && !isActive(row));
+    const statusMissing = group.filter((row) => !isRemoval(row) && !row.activeStatus);
+    const lines = group.reduce((sum, row) => sum + lineCount(row), 0);
+    const reconciledLines = [active, sameYearRemoval, laterRemoval, removalDateMissing, inactiveNotRemoval, statusMissing]
+      .flat()
+      .reduce((sum, row) => sum + lineCount(row), 0);
+    return {
+      key,
+      label: key,
+      records: group.length,
+      lines,
+      monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
+      activeLines: active.reduce((sum, row) => sum + lineCount(row), 0),
+      sameYearRemovalLines: sameYearRemoval.reduce((sum, row) => sum + lineCount(row), 0),
+      laterRemovalLines: laterRemoval.reduce((sum, row) => sum + lineCount(row), 0),
+      removalDateMissingLines: removalDateMissing.reduce((sum, row) => sum + lineCount(row), 0),
+      inactiveNotRemovalLines: inactiveNotRemoval.reduce((sum, row) => sum + lineCount(row), 0),
+      statusMissingLines: statusMissing.reduce((sum, row) => sum + lineCount(row), 0),
+      reconciledLines,
+      unreconciledLines: lines - reconciledLines,
+    };
+  }).sort((left, right) => right.lines - left.lines || left.label.localeCompare(right.label, "zh-CN"));
 }
 
 export function buildCompletionCohorts(rows: BusinessRow[]): CompletionCohortRow[] {
