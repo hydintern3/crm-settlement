@@ -414,8 +414,12 @@ export function isNewVolume(row: BusinessRow) {
   return row.meteringRule === "新增量";
 }
 
+export function isAnnualRemoval(row: BusinessRow, year = "2026") {
+  return isRemoval(row) && row.rawCompletedDate.startsWith(`${year}-`);
+}
+
 export function isSameYearInstallRemoval(row: BusinessRow, year = "2026") {
-  return isRemoval(row) && row.initialCompletedDate.startsWith(`${year}-`) && row.rawCompletedDate.startsWith(`${year}-`);
+  return isAnnualRemoval(row, year) && row.initialCompletedDate.startsWith(`${year}-`);
 }
 
 export function isActive(row: BusinessRow) {
@@ -520,9 +524,9 @@ function lineCount(row: BusinessRow) {
 }
 
 export function convertedLineCount(row: BusinessRow) {
-  const tariff = row.monthlyTariff;
-  if (!Number.isFinite(tariff) || tariff === null || tariff < 10_000) return 0;
-  return Math.min(20, 1 + Math.floor((tariff - 10_000) / 2_000));
+  const metering = row.monthlyMetering;
+  if (!Number.isFinite(metering) || metering === null || metering < 10_000) return 0;
+  return Math.min(20, 1 + Math.floor((metering - 10_000) / 2_000));
 }
 
 export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75): DoubleLineAssessment {
@@ -728,13 +732,12 @@ export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
 
 export function buildSalesNetGrowth(rows: BusinessRow[], year = "2026"): SalesNetGrowthRow[] {
   const isAnnualAddition = (row: BusinessRow) => row.meteringRule === "新增量";
-  const isAnnualRemoval = (row: BusinessRow) => isRemoval(row) && row.rawCompletedDate.startsWith(`${year}-`);
   const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
   return owners.map((owner) => {
     const group = rows.filter((row) => row.owner === owner);
     const additions = group.filter(isAnnualAddition);
-    const sameYearRemovals = group.filter((row) => isAnnualAddition(row) && isAnnualRemoval(row));
-    const annualRemovals = group.filter(isAnnualRemoval);
+    const sameYearRemovals = group.filter((row) => isAnnualAddition(row) && isAnnualRemoval(row, year));
+    const annualRemovals = group.filter((row) => isAnnualRemoval(row, year));
     const additionLines = additions.reduce((sum, row) => sum + lineCount(row), 0);
     const sameYearRemovalLines = sameYearRemovals.reduce((sum, row) => sum + lineCount(row), 0);
     const annualRemovalLines = annualRemovals.reduce((sum, row) => sum + lineCount(row), 0);

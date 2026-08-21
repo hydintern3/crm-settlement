@@ -3,7 +3,7 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { AnalyticsPlaceholder } from "./components/AnalyticsPlaceholder";
 import { AnnualAdditionReconciliation, BusinessProgressTables, BusinessReportTables, DataQualityReportTables, DoubleLineOverview, NetGrowthOverview, ProfitTargetTables, ProviderReportTables, SameYearInstallRemovalConfirmation, SalesReportTables, SettlementReportTables, SupplierReportTables } from "./components/ReportTables";
-import { applyDynamicCalculationRules, buildSettlementReviewSummary, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, isSameYearInstallRemoval, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
+import { applyDynamicCalculationRules, buildSettlementReviewSummary, buildSnapshot, DEFAULT_CALCULATION_RULES, EMPTY_SNAPSHOT, isAnnualRemoval, isRemoval, isSameYearInstallRemoval, localDateISO, normalizeSnapshot, summarizeRows, type BusinessRow, type CalculationRuleConfig, type NumericValue, type RankedItem, type Snapshot } from "./lib/data-model";
 import { BASE_PATH } from "./lib/deployment";
 import type { DataVersionManifest } from "./lib/data-version";
 import { buildChartData } from "./lib/chart-aggregation";
@@ -192,20 +192,28 @@ function MultiSelectGrid({ label, options, selected, onChange, limit = 12 }: { l
   </div></fieldset>;
 }
 
-function Metrics({ rows, showAnalysis = true, annualRows }: { rows: BusinessRow[]; showAnalysis?: boolean; annualRows?: BusinessRow[] }) {
+function Metrics({ rows, showAnalysis = true, annualRows, year = "2026" }: { rows: BusinessRow[]; showAnalysis?: boolean; annualRows?: BusinessRow[]; year?: string }) {
   const summary = summarizeRows(rows);
   const activeRows = rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常");
   const removalRows = rows.filter((row) => row.businessEvent === "拆机");
-  const sameYearRemovalRows = (annualRows ?? []).filter((row) => isSameYearInstallRemoval(row, "2026"));
+  const annualSourceRows = annualRows ?? rows;
+  const annualAdditionRows = annualSourceRows.filter((row) => row.initialCompletedDate.startsWith(`${year}-`));
+  const annualRemovalRows = annualSourceRows.filter((row) => isAnnualRemoval(row, year));
+  const sameYearRemovalRows = annualSourceRows.filter((row) => isSameYearInstallRemoval(row, year));
   const monthlyDetails = (source: ReturnType<typeof summarizeRows>) => ["月平均计量 " + moneyYuan(source.monthlyMetering) + " 元", "月平均资费 " + moneyYuan(source.monthlyTariff) + " 元"];
-  const metrics = [
+  const metrics = annualRows ? [
+    { label: `${year} 年度新增`, value: numberText(annualAdditionRows.length), unit: "条", note: "初始完工日期属于该年度", details: monthlyDetails(summarizeRows(annualAdditionRows)), tone: "navy" },
+    { label: "实际活跃", value: numberText(summary.active), unit: "条", note: summary.total === null ? "--" : ((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1) + "% 活跃率", details: monthlyDetails(summarizeRows(activeRows)), tone: "green" },
+    { label: `${year} 年度拆机`, value: numberText(annualRemovalRows.length), unit: "条", note: "业务属性为拆机，CRM 完工日期属于该年度", details: monthlyDetails(summarizeRows(annualRemovalRows)), tone: "rose" },
+    { label: `${year} 新增当年拆机`, value: numberText(sameYearRemovalRows.length), unit: "条", note: "初始完工日期、CRM 完工日期均属于该年度", details: monthlyDetails(summarizeRows(sameYearRemovalRows)), tone: "amber" },
+    { label: "结算待复核", value: numberText(summary.review), unit: "条", note: "不影响版本管理、查询和筛选", tone: "violet" },
+  ] : [
     { label: "业务总记录", value: numberText(summary.total), unit: "条", details: monthlyDetails(summary), tone: "navy" },
     { label: "实际活跃", value: numberText(summary.active), unit: "条", note: summary.total === null ? "--" : ((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1) + "% 活跃率", details: monthlyDetails(summarizeRows(activeRows)), tone: "green" },
     { label: "拆机", value: numberText(summary.removals), unit: "条", details: monthlyDetails(summarizeRows(removalRows)), tone: "rose" },
-    ...(annualRows ? [{ label: "2026 新增当年拆机", value: numberText(sameYearRemovalRows.reduce((sum, row) => sum + (row.lines ?? 1), 0)), unit: "线", note: `${sameYearRemovalRows.length} 条业务 · 初始/拆机完工日期均为2026`, details: monthlyDetails(summarizeRows(sameYearRemovalRows)), tone: "amber" }] : []),
     { label: "结算待复核", value: numberText(summary.review), unit: "条", note: "不影响版本管理、查询和筛选", tone: "violet" },
   ];
-  return <><section className={`metric-grid ${annualRows ? "metric-grid-overview" : ""}`}>{metrics.map(({ label, value, unit, note, details, tone }) => <article className={["metric-card", "metric-" + tone].join(" ")} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div>{note && <small className="metric-note">{note}</small>}{details && <div className="metric-details">{details.map((detail) => <span key={detail}>{detail}</span>)}</div>}</article>)}</section>{showAnalysis && <section className="module-grid report-module-grid"><NetGrowthOverview rows={rows} /><DoubleLineOverview rows={rows} /></section>}</>;
+  return <><section className={`metric-grid ${annualRows ? "metric-grid-overview" : ""}`}>{metrics.map(({ label, value, unit, note, details, tone }) => <article className={["metric-card", "metric-" + tone].join(" ")} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div>{note && <small className="metric-note">{note}</small>}{details && <div className="metric-details">{details.map((detail) => <span key={detail}>{detail}</span>)}</div>}</article>)}</section>{showAnalysis && <section className="module-grid report-module-grid"><NetGrowthOverview rows={rows} year={year} /><DoubleLineOverview rows={rows} /></section>}</>;
 }
 function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: number }) {
   const [page, setPage] = useState(1);
@@ -314,7 +322,9 @@ export default function Home() {
   const effectiveCalculationRules = useMemo(() => calculationRules.dateMode === "current" ? { ...calculationRules, baseDate: currentDate } : calculationRules, [calculationRules, currentDate]);
   const calculatedRows = useMemo(() => applyDynamicCalculationRules(snapshot?.rows ?? [], effectiveCalculationRules), [snapshot, effectiveCalculationRules]);
   const filteredRows = useMemo(() => calculatedRows.filter((row) => {
-    const [year, month] = row.completedDate.split("-");
+    // 年度/月度筛选使用业务对应的 CRM 源日期：拆机看完工日期，其他业务看初始完工日期。
+    const sourceDate = isRemoval(row) ? row.rawCompletedDate : (row.initialCompletedDate || row.rawCompletedDate);
+    const [year, month] = sourceDate.split("-");
     return (!filters.years.length || filters.years.includes(year)) && (!filters.months.length || filters.months.includes(month)) &&
       (!filters.owners.length || filters.owners.includes(row.owner)) && (!filters.types.length || filters.types.includes(row.businessEvent)) &&
       (!filters.statuses.length || filters.statuses.includes(row.activeStatus)) && (!filters.rules.length || filters.rules.includes(row.meteringRule)) &&
@@ -326,6 +336,7 @@ export default function Home() {
       (!filters.removalTypes.length || filters.removalTypes.includes(row.removalType)) &&
       (!deferredKeyword || [row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.calculationStatus, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked].join(" ").toLowerCase().includes(deferredKeyword));
   }), [calculatedRows, filters, deferredKeyword]);
+  const selectedYear = filters.years.length === 1 ? filters.years[0] : "2026";
   const analysis = useMemo(() => buildSnapshot(filteredRows, snapshot?.source ?? EMPTY_SNAPSHOT.source, snapshot?.mode ?? "empty"), [filteredRows, snapshot?.source, snapshot?.mode]);
 
   async function refreshServerData() {
@@ -597,10 +608,10 @@ export default function Home() {
   </div></section>;
 
   let content: React.ReactNode;
-  if (activeNav === "总览") content = <><section className="dashboard-toolbar"><div><strong>自定义分析总览</strong><span>所有图表基于当前筛选的 {filteredRows.length.toLocaleString("zh-CN")} 条记录实时重算</span></div><div><button className="ghost-button" onClick={() => setShowTemplateManager((value) => !value)}>{showTemplateManager ? "收起模板管理" : "管理模板"}</button><button className="ghost-button" onClick={() => setDashboardEditing((value) => !value)}>{dashboardEditing ? "完成排版" : "编辑总览"}</button><button className="primary-button" onClick={() => setBuilderTemplate(null)}>＋ 新建图表</button></div></section>{chartNotice && <div className={`center-notice ${chartNotice.tone}`}>{chartNotice.text}</div>}{showTemplateManager && <TemplateManager templates={chartTemplates} onEdit={(template) => setBuilderTemplate(template)} onDuplicate={(template) => void duplicateChart(template)} onTogglePin={toggleChartPin} onArchive={archiveChart} />}<Metrics rows={filteredRows} annualRows={calculatedRows} /><SameYearInstallRemovalConfirmation rows={calculatedRows} year="2026" />{pinnedTemplates.length ? <section className="dashboard-grid custom-dashboard-grid">{pinnedTemplates.map((template, index) => <DashboardChartCard key={`${template.id}-${template.revision}`} template={template} rows={filteredRows} editing={dashboardEditing} first={index === 0} last={index === pinnedTemplates.length - 1} onEdit={() => setBuilderTemplate(template)} onTogglePin={() => toggleChartPin(template)} onArchive={() => archiveChart(template)} onMove={(direction) => void moveChart(template, direction)} onSelect={selectChartValue} onViewData={() => setChartDataTemplate(template)} />)}</section> : <Panel label="EMPTY DASHBOARD" title="总览还没有固定图表" className="wide-panel"><div className="chart-empty"><span>点击“新建图表”，配置维度和指标后固定到总览。</span></div></Panel>}</>;
+  if (activeNav === "总览") content = <><section className="dashboard-toolbar"><div><strong>自定义分析总览</strong><span>所有图表基于当前筛选的 {filteredRows.length.toLocaleString("zh-CN")} 条记录实时重算</span></div><div><button className="ghost-button" onClick={() => setShowTemplateManager((value) => !value)}>{showTemplateManager ? "收起模板管理" : "管理模板"}</button><button className="ghost-button" onClick={() => setDashboardEditing((value) => !value)}>{dashboardEditing ? "完成排版" : "编辑总览"}</button><button className="primary-button" onClick={() => setBuilderTemplate(null)}>＋ 新建图表</button></div></section>{chartNotice && <div className={`center-notice ${chartNotice.tone}`}>{chartNotice.text}</div>}{showTemplateManager && <TemplateManager templates={chartTemplates} onEdit={(template) => setBuilderTemplate(template)} onDuplicate={(template) => void duplicateChart(template)} onTogglePin={toggleChartPin} onArchive={archiveChart} />}<Metrics rows={filteredRows} annualRows={calculatedRows} year={selectedYear} /><SameYearInstallRemovalConfirmation rows={calculatedRows} year={selectedYear} />{pinnedTemplates.length ? <section className="dashboard-grid custom-dashboard-grid">{pinnedTemplates.map((template, index) => <DashboardChartCard key={`${template.id}-${template.revision}`} template={template} rows={filteredRows} editing={dashboardEditing} first={index === 0} last={index === pinnedTemplates.length - 1} onEdit={() => setBuilderTemplate(template)} onTogglePin={() => toggleChartPin(template)} onArchive={() => archiveChart(template)} onMove={(direction) => void moveChart(template, direction)} onSelect={selectChartValue} onViewData={() => setChartDataTemplate(template)} />)}</section> : <Panel label="EMPTY DASHBOARD" title="总览还没有固定图表" className="wide-panel"><div className="chart-empty"><span>点击“新建图表”，配置维度和指标后固定到总览。</span></div></Panel>}</>;
   else if (activeNav === "统一查询") content = <Panel label="DETAIL QUERY" title="业务明细" aside={<button className="primary-button" disabled={!filteredRows.length} onClick={() => exportRows(filteredRows)}>导出筛选结果</button>}><p className="panel-note">筛选、分页和导出均基于当前真实数据；空字段统一显示为 --。</p><DataTable rows={filteredRows} /></Panel>;
   else if (activeNav === "业务分析") content = <><Metrics rows={filteredRows} showAnalysis={false} /><BusinessProgressTables rows={filteredRows} rules={effectiveCalculationRules} /><section className="dashboard-grid"><Panel label="BUSINESS TREND" title="月度计量趋势" className="wide-panel monthly-trend-panel"><MonthlyChart data={analysis.monthly} /></Panel><Panel label="RULE STRUCTURE" title="计量规则结构"><RuleChart data={analysis.meteringRules} onSelect={selectRule} /></Panel></section><BusinessReportTables rows={filteredRows} year={filters.years.length === 1 ? filters.years[0] : undefined} /></>;
-  else if (activeNav === "销售分析") content = <><section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SalesReportTables rows={filteredRows} /><AnnualAdditionReconciliation rows={calculatedRows} year="2026" /></>;
+  else if (activeNav === "销售分析") content = <><section className="module-grid"><Panel label="OWNER RANKING" title="负责人业绩排名"><RankingChart items={analysis.owners} onSelect={(name) => selectRank(name, "owner")} /></Panel><Panel label="OWNER DETAILS" title="负责人业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SalesReportTables rows={filteredRows} year={selectedYear} /><AnnualAdditionReconciliation rows={calculatedRows} year={selectedYear} /></>;
   else if (activeNav === "供应商分析") content = <><section className="module-grid"><Panel label="SUPPLIER DISTRIBUTION" title="供应商分布"><DistributionChart items={analysis.suppliers} onSelect={(name) => selectRank(name, "supplier")} /></Panel><Panel label="SUPPLIER DETAILS" title="供应商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><SupplierReportTables rows={filteredRows} /></>;
   else if (activeNav === "服务商分析") content = <><section className="module-grid"><Panel label="SERVICE PROVIDER DISTRIBUTION" title="服务商分布（I 服务编号）"><DistributionChart items={analysis.providers} onSelect={(name) => selectRank(name, "service")} /></Panel><Panel label="SERVICE PROVIDER DETAILS" title="服务商业务明细"><DataTable rows={filteredRows} pageSize={10} /></Panel></section><ProviderReportTables rows={filteredRows} /></>;
   else if (activeNav === "毛利与目标") content = <ProfitTargetTables />;

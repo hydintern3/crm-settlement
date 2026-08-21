@@ -15,6 +15,7 @@ import {
   buildBusinessProgress,
   classifyBusinessEvent,
   isNewVolume,
+  isAnnualRemoval,
   isSameYearInstallRemoval,
   localDateISO,
   maskContactLandline,
@@ -57,27 +58,28 @@ test("field mapping preserves source values and audit fields", () => {
   assert.equal(maskContactLandline("1234"), "****");
 });
 
-test("double-line assessment uses monthly tariff with 2,000 yuan increments and a 20-line cap", () => {
+test("double-line assessment uses monthly metering with 2,000 yuan increments and a 20-line cap", () => {
   const rows = [
-    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "9999", 优惠资费: "50000" }),
-    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "10000" }),
-    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "12000" }),
-    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "14000" }),
-    toBusinessRow({ 业务属性: "拆机", 线数: "2", 月平均资费: "50000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均计量: "9999", 月平均资费: "50000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均计量: "10000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均计量: "11999" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均计量: "12000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均计量: "14000" }),
+    toBusinessRow({ 业务属性: "拆机", 线数: "2", 月平均计量: "50000", 月平均资费: "1" }),
   ];
   const result = buildDoubleLineAssessment(rows, 0.75);
-  assert.equal(result.installLines, 4);
-  assert.equal(result.installConvertibleRecords, 3);
-  assert.equal(result.installConvertedLines, 6);
-  assert.equal(result.installTotalLines, 10);
+  assert.equal(result.installLines, 5);
+  assert.equal(result.installConvertibleRecords, 4);
+  assert.equal(result.installConvertedLines, 7);
+  assert.equal(result.installTotalLines, 12);
   assert.equal(result.removalLines, 2);
   assert.equal(result.removalConvertibleRecords, 1);
   assert.equal(result.removalConvertedLines, 20);
   assert.equal(result.removalTotalLines, 22);
-  assert.equal(result.rawRatio, 50);
-  assert.equal(result.convertedRatio, 220);
+  assert.equal(result.rawRatio, 40);
+  assert.equal(result.convertedRatio, 183.333333);
   assert.equal(result.rawPendingLines, 0);
-  assert.equal(result.convertedPendingLines, 20);
+  assert.equal(result.convertedPendingLines, 18);
 });
 
 test("service combinations preserve single-sided records and policy distribution counts I and II service sides", () => {
@@ -224,6 +226,12 @@ test("same-year install removal uses initial completion for addition and CRM com
   assert.equal(isSameYearInstallRemoval(toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2026-01-02", 完工日期: "2025-12-31" })), false);
   assert.equal(isSameYearInstallRemoval(toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2025-12-31", 完工日期: "2026-01-02" })), false);
   assert.equal(isSameYearInstallRemoval(toBusinessRow({ 业务属性: "新装", 初始完工日期: "2026-01-02", 完工日期: "2026-06-03" })), false);
+});
+
+test("annual removal uses CRM completion date rather than initial completion date", () => {
+  assert.equal(isAnnualRemoval(toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2025-12-31", 完工日期: "2026-01-02" })), true);
+  assert.equal(isAnnualRemoval(toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2026-01-02", 完工日期: "2025-12-31" })), false);
+  assert.equal(isAnnualRemoval(toBusinessRow({ 业务属性: "新装", 初始完工日期: "2026-01-02", 完工日期: "2026-03-01" })), false);
 });
 
 test("local date formatting does not use UTC date boundaries", () => {
