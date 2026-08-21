@@ -194,15 +194,17 @@ function MultiSelectGrid({ label, options, selected, onChange, limit = 12 }: { l
 
 function Metrics({ rows, showAnalysis = true }: { rows: BusinessRow[]; showAnalysis?: boolean }) {
   const summary = summarizeRows(rows);
+  const activeRows = rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常");
+  const removalRows = rows.filter((row) => row.businessEvent === "拆机");
+  const monthlyDetails = (source: ReturnType<typeof summarizeRows>) => ["月平均计量 " + moneyYuan(source.monthlyMetering) + " 元", "月平均资费 " + moneyYuan(source.discountedTariff) + " 元"];
   const metrics = [
-    ["业务总记录", numberText(summary.total), "条", `月平均计量 ${moneyYuan(summary.monthlyMetering)} 元 · 月平均资费 ${moneyYuan(summary.discountedTariff)} 元`, "navy"],
-    ["实际活跃", numberText(summary.active), "条", `${summary.total === null ? "--" : `${((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1)}% 活跃率`} · 月平均计量 ${moneyYuan(summarizeRows(rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常")).monthlyMetering)} 元 · 月平均资费 ${moneyYuan(summarizeRows(rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常")).discountedTariff)} 元`, "green"],
-    ["拆机", numberText(summary.removals), "条", `月平均计量 ${moneyYuan(summarizeRows(rows.filter((row) => row.businessEvent === "拆机")).monthlyMetering)} 元 · 月平均资费 ${moneyYuan(summarizeRows(rows.filter((row) => row.businessEvent === "拆机")).discountedTariff)} 元`, "rose"],
-    ["结算待复核", numberText(summary.review), "条", "不影响版本管理、查询和筛选", "violet"],
+    { label: "业务总记录", value: numberText(summary.total), unit: "条", details: monthlyDetails(summary), tone: "navy" },
+    { label: "实际活跃", value: numberText(summary.active), unit: "条", note: summary.total === null ? "--" : ((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1) + "% 活跃率", details: monthlyDetails(summarizeRows(activeRows)), tone: "green" },
+    { label: "拆机", value: numberText(summary.removals), unit: "条", details: monthlyDetails(summarizeRows(removalRows)), tone: "rose" },
+    { label: "结算待复核", value: numberText(summary.review), unit: "条", note: "不影响版本管理、查询和筛选", tone: "violet" },
   ];
-  return <><section className="metric-grid">{metrics.map(([label, value, unit, note, tone]) => <article className={`metric-card metric-${tone}`} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div><small>{note}</small></article>)}</section>{showAnalysis && <section className="module-grid report-module-grid"><NetGrowthOverview rows={rows} /><DoubleLineOverview rows={rows} /></section>}</>;
+  return <><section className="metric-grid">{metrics.map(({ label, value, unit, note, details, tone }) => <article className={["metric-card", "metric-" + tone].join(" ")} key={label}><div className="metric-top"><span>{label}</span><i /></div><div className="metric-value"><strong>{value}</strong><span>{value === "--" ? "" : unit}</span></div>{note && <small className="metric-note">{note}</small>}{details && <div className="metric-details">{details.map((detail) => <span key={detail}>{detail}</span>)}</div>}</article>)}</section>{showAnalysis && <section className="module-grid report-module-grid"><NetGrowthOverview rows={rows} /><DoubleLineOverview rows={rows} /></section>}</>;
 }
-
 function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: number }) {
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));

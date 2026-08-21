@@ -165,7 +165,7 @@ h2 { margin-bottom: 0; font: 700 16px/1.25 "STSong", "Microsoft YaHei UI", serif
 
 .metric-grid { margin: 17px 0; display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 11px; }
 .metric-card {
-  min-height: 118px;
+  min-height: 142px;
   padding: 17px 17px 14px;
   overflow: hidden;
   position: relative;
@@ -180,6 +180,9 @@ h2 { margin-bottom: 0; font: 700 16px/1.25 "STSong", "Microsoft YaHei UI", serif
 .metric-value { margin: 9px 0 6px; display: flex; align-items: baseline; gap: 5px; }
 .metric-value strong { font: 700 26px/1 "Segoe UI", sans-serif; letter-spacing: -.04em; }
 .metric-value span, .metric-card small { color: #8490a1; font-size: 9px; }
+.metric-note { display: block; line-height: 1.55; }
+.metric-details { margin-top: 4px; display: grid; gap: 3px; }
+.metric-details span { display: block; padding-top: 3px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); color: #63748b; font-size: 11px; line-height: 1.45; font-variant-numeric: tabular-nums; }
 .metric-navy { color: var(--navy); } .metric-green { color: var(--green); } .metric-amber { color: var(--amber); }
 .metric-blue { color: var(--blue); } .metric-rose { color: var(--rose); } .metric-violet { color: var(--violet); }
 

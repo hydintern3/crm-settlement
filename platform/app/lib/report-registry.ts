@@ -146,10 +146,10 @@ export const REPORTS: ReportDefinition[] = [
   {
     id: "sales-net-growth",
     name: "销售业务净增情况",
-    description: "负责人新增、拆机、净增业务量与拆装比",
+    description: "负责人 2026 新增口径、当年新增当年拆机、年度拆机与净增业务量",
     dataset: "business",
     dimensions: ["负责人", "完工年月"],
-    metrics: ["新增数", "拆机数", "净增数", "拆装比"],
+    metrics: ["新增线数", "当年新增当年拆机线数", "净增线数", "2026年度拆机线数"],
     status: "ready",
     short: "净增",
     tone: "blue",

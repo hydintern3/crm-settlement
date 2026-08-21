@@ -117,6 +117,14 @@ export type MonthlyBusinessRow = {
   installRemovalRatio: NumericValue;
 };
 
+export type AnnualRemovalSummaryRow = {
+  month: string;
+  records: number;
+  lines: number;
+  monthlyMetering: NumericValue;
+  discountedTariff: NumericValue;
+};
+
 export type NetGrowthRow = {
   owner: string;
   installs: number;
@@ -126,6 +134,19 @@ export type NetGrowthRow = {
   netLines: number;
   netAmount: NumericValue;
   installRemovalRatio: NumericValue;
+};
+
+export type SalesNetGrowthRow = {
+  owner: string;
+  additions: number;
+  additionAmount: NumericValue;
+  sameYearRemovals: number;
+  sameYearRemovalAmount: NumericValue;
+  netLines: number;
+  netAmount: NumericValue;
+  annualRemovals: number;
+  annualRemovalAmount: NumericValue;
+  sameYearRemovalRate: NumericValue;
 };
 
 export type DoubleLineAssessment = {
@@ -639,6 +660,22 @@ export function buildMonthlyBusiness(rows: BusinessRow[], year = String(new Date
   });
 }
 
+export function buildAnnualRemovalSummary(rows: BusinessRow[], year: string): AnnualRemovalSummaryRow[] {
+  const groups = new Map<string, BusinessRow[]>();
+  for (const row of rows) {
+    const month = row.rawCompletedDate.match(/^(\d{4}-\d{2})/)?.[1];
+    if (!month || !month.startsWith(`${year}-`) || !isRemoval(row)) continue;
+    groups.set(month, [...(groups.get(month) ?? []), row]);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, group]) => ({
+    month,
+    records: group.length,
+    lines: group.reduce((sum, row) => sum + lineCount(row), 0),
+    monthlyMetering: sumKnown(group.map((row) => row.monthlyMetering)),
+    discountedTariff: sumKnown(group.map((row) => row.discountedTariff)),
+  }));
+}
+
 export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
   const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
   return owners.map((owner) => {
@@ -660,6 +697,35 @@ export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
       installRemovalRatio: installLines ? (removalLines / installLines) * 100 : null,
     };
   }).sort((left, right) => right.netLines - left.netLines);
+}
+
+export function buildSalesNetGrowth(rows: BusinessRow[], year = "2026"): SalesNetGrowthRow[] {
+  const isAnnualAddition = (row: BusinessRow) => row.meteringRule === "新增量" || row.initialCompletedDate.startsWith(`${year}-`);
+  const isAnnualRemoval = (row: BusinessRow) => isRemoval(row) && row.rawCompletedDate.startsWith(`${year}-`);
+  const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
+  return owners.map((owner) => {
+    const group = rows.filter((row) => row.owner === owner);
+    const additions = group.filter(isAnnualAddition);
+    const sameYearRemovals = group.filter((row) => isAnnualAddition(row) && isAnnualRemoval(row));
+    const annualRemovals = group.filter(isAnnualRemoval);
+    const additionLines = additions.reduce((sum, row) => sum + lineCount(row), 0);
+    const sameYearRemovalLines = sameYearRemovals.reduce((sum, row) => sum + lineCount(row), 0);
+    const annualRemovalLines = annualRemovals.reduce((sum, row) => sum + lineCount(row), 0);
+    const additionAmount = sumKnown(additions.map((row) => row.monthlyMetering));
+    const sameYearRemovalAmount = sumKnown(sameYearRemovals.map((row) => row.monthlyMetering));
+    return {
+      owner,
+      additions: additionLines,
+      additionAmount,
+      sameYearRemovals: sameYearRemovalLines,
+      sameYearRemovalAmount,
+      netLines: additionLines - sameYearRemovalLines,
+      netAmount: additionAmount === null && sameYearRemovalAmount === null ? null : (additionAmount ?? 0) - (sameYearRemovalAmount ?? 0),
+      annualRemovals: annualRemovalLines,
+      annualRemovalAmount: sumKnown(annualRemovals.map((row) => row.monthlyMetering)),
+      sameYearRemovalRate: additionLines ? (sameYearRemovalLines / additionLines) * 100 : null,
+    };
+  }).sort((left, right) => right.netLines - left.netLines || left.owner.localeCompare(right.owner, "zh-CN"));
 }
 
 export function buildCompletionCohorts(rows: BusinessRow[]): CompletionCohortRow[] {

@@ -3,11 +3,12 @@
 import { useState, type ReactNode } from "react";
 import {
   buildBusinessProgress,
+  buildAnnualRemovalSummary,
   buildDoubleLineAssessment,
   buildCompletionCohorts,
   buildDataQualityMetrics,
   buildMonthlyBusiness,
-  buildNetGrowth,
+  buildSalesNetGrowth,
   buildPerformance,
   buildServiceCombinationRows,
   buildServicePolicyDistribution,
@@ -143,6 +144,7 @@ function UnavailableTable({ columns, missing, note }: { columns: string[]; missi
 export function BusinessReportTables({ rows, year }: { rows: BusinessRow[]; year?: string }) {
   const monthlyYear = year || [...new Set(rows.map((row) => row.rawCompletedDate.slice(0, 4)).filter((value) => /^\d{4}$/.test(value)))].sort().at(-1);
   const monthlyData = buildMonthlyBusiness(rows, monthlyYear);
+  const annualRemovalData = buildAnnualRemovalSummary(rows, "2026");
   const monthly = monthlyData.map((item) => ({
     key: item.month,
     month: item.month,
@@ -187,6 +189,22 @@ export function BusinessReportTables({ rows, year }: { rows: BusinessRow[]; year
     activeRate: percent(cohortLines ? cohortActive / cohortLines * 100 : null), amount: money(knownSum(cohortData.map((item) => item.monthlyMetering))), activeAmount: money(knownSum(cohortData.map((item) => item.activeMonthlyMetering))),
   };
   const auditRows = buildAnnualAuditRows(rows, monthlyYear);
+  const annualRemovalRows = annualRemovalData.map((item) => ({
+    key: item.month,
+    month: item.month,
+    records: number(item.records),
+    lines: number(item.lines),
+    monthlyMetering: money(item.monthlyMetering),
+    discountedTariff: money(item.discountedTariff),
+  }));
+  const annualRemovalSummary = {
+    key: "summary",
+    month: "2026 年总计",
+    records: number(annualRemovalData.reduce((sum, item) => sum + item.records, 0)),
+    lines: number(annualRemovalData.reduce((sum, item) => sum + item.lines, 0)),
+    monthlyMetering: money(knownSum(annualRemovalData.map((item) => item.monthlyMetering))),
+    discountedTariff: money(knownSum(annualRemovalData.map((item) => item.discountedTariff))),
+  };
   return <section className="module-grid report-module-grid">
     <ReportPanel wide label="ANNUAL INSTALL / REMOVAL" title="全年业务拆装情况" status="partial" description={`统计年度：${monthlyYear || "--"}；月份字段：源表完工日期；新装/当年拆机按业务属性统计。当前活跃为当前状态，不代表历史月末状态。`}>
       <ReportTable columns={[
@@ -196,6 +214,12 @@ export function BusinessReportTables({ rows, year }: { rows: BusinessRow[]; year
         { key: "annualTarget", label: "全年目标", numeric: true }, { key: "annualCompletion", label: "全年完成比", numeric: true }, { key: "ratio", label: "月度拆装比", numeric: true },
         { key: "quarterRatioTarget", label: "季度拆装比目标", numeric: true }, { key: "quarterRatio", label: "季度拆装比", numeric: true }, { key: "annualRatio", label: "全年拆装比", numeric: true },
       ]} rows={monthly} summary={monthlySummary} />
+    </ReportPanel>
+    <ReportPanel wide label="ANNUAL REMOVAL SUMMARY" title="2026 年度拆机汇总" description="纳入条件：业务属性（平台）为“拆机”，且 CRM 源表完工日期在 2026 年；按完工月份汇总。不使用初始完工日期或平台日期兜底。">
+      <ReportTable columns={[
+        { key: "month", label: "完工月份（CRM）" }, { key: "records", label: "拆机业务数", numeric: true }, { key: "lines", label: "拆机线数", numeric: true },
+        { key: "monthlyMetering", label: "月平均计量", numeric: true }, { key: "discountedTariff", label: "优惠资费", numeric: true },
+      ]} rows={annualRemovalRows} summary={annualRemovalSummary} emptyText="当前筛选结果中没有符合条件的 2026 年拆机记录" />
     </ReportPanel>
     <ReportPanel wide label="COMPLETION COHORT" title="完工批次留存分析" description="按统计完工月份形成批次；统计完工日期优先取初始完工日期，缺失时使用完工日期兜底。">
       <ReportTable columns={[
@@ -215,9 +239,9 @@ export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
   const performance = performanceData.map((item) => ({
     key: item.key, owner: item.label, lines: number(item.lines), amount: money(item.amount), average: money(item.average), share: percent(item.share), rank: item.rank,
   }));
-  const netGrowthData = buildNetGrowth(rows);
+  const netGrowthData = buildSalesNetGrowth(rows);
   const netGrowth = netGrowthData.map((item) => ({
-    key: item.owner, owner: item.owner, installs: number(item.installs), installAmount: money(item.installAmount), removals: number(item.removals), removalAmount: money(item.removalAmount), netLines: number(item.netLines), netAmount: money(item.netAmount), ratio: percent(item.installRemovalRatio),
+    key: item.owner, owner: item.owner, additions: number(item.additions), additionAmount: money(item.additionAmount), sameYearRemovals: number(item.sameYearRemovals), sameYearRemovalAmount: money(item.sameYearRemovalAmount), netLines: number(item.netLines), netAmount: money(item.netAmount), annualRemovals: number(item.annualRemovals), annualRemovalAmount: money(item.annualRemovalAmount), ratio: percent(item.sameYearRemovalRate),
   }));
   const marketingData = buildPerformance(rows, "owner", { amount: "marketingFee" });
   const marketing = marketingData.map((item) => ({ key: item.key, owner: item.label, lines: number(item.lines), amount: money(item.amount) }));
@@ -225,9 +249,9 @@ export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
   const performanceAmount = knownSum(performanceData.map((item) => item.amount));
   const performanceSummary = { key: "summary", owner: "总计 / 总览", lines: number(performanceLines), amount: money(performanceAmount), average: money(performanceAmount === null ? null : performanceAmount / Math.max(performanceLines, 1)), share: performanceData.length ? "100.0%" : "--", rank: "--" };
   const marketingSummary = { key: "summary", owner: "总计 / 总览", lines: number(marketingData.reduce((sum, item) => sum + item.lines, 0)), amount: money(knownSum(marketingData.map((item) => item.amount))) };
-  const netInstalls = netGrowthData.reduce((sum, item) => sum + item.installs, 0);
-  const netRemovals = netGrowthData.reduce((sum, item) => sum + item.removals, 0);
-  const netSummary = { key: "summary", owner: "总计 / 总览", installs: number(netInstalls), installAmount: money(knownSum(netGrowthData.map((item) => item.installAmount))), removals: number(netRemovals), removalAmount: money(knownSum(netGrowthData.map((item) => item.removalAmount))), netLines: number(netInstalls - netRemovals), netAmount: money(knownSum(netGrowthData.map((item) => item.netAmount))), ratio: percent(netInstalls ? netRemovals / netInstalls * 100 : null) };
+  const netAdditions = netGrowthData.reduce((sum, item) => sum + item.additions, 0);
+  const netSameYearRemovals = netGrowthData.reduce((sum, item) => sum + item.sameYearRemovals, 0);
+  const netSummary = { key: "summary", owner: "总计 / 总览", additions: number(netAdditions), additionAmount: money(knownSum(netGrowthData.map((item) => item.additionAmount))), sameYearRemovals: number(netSameYearRemovals), sameYearRemovalAmount: money(knownSum(netGrowthData.map((item) => item.sameYearRemovalAmount))), netLines: number(netAdditions - netSameYearRemovals), netAmount: money(knownSum(netGrowthData.map((item) => item.netAmount))), annualRemovals: number(netGrowthData.reduce((sum, item) => sum + item.annualRemovals, 0)), annualRemovalAmount: money(knownSum(netGrowthData.map((item) => item.annualRemovalAmount))), ratio: percent(netAdditions ? netSameYearRemovals / netAdditions * 100 : null) };
   return <section className="module-grid report-module-grid">
     <ReportPanel label="SALES COMPLETION" title="销售完成情况（优惠资费口径）" status="partial" description="业务额取源表优惠资费有效值；空值不按月平均计量替代。">
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "业务额", numeric: true }, { key: "average", label: "业务均值", numeric: true }, { key: "share", label: "贡献率", numeric: true }, { key: "rank", label: "排名", numeric: true }]} rows={performance} summary={performanceSummary} />
@@ -235,8 +259,8 @@ export function SalesReportTables({ rows }: { rows: BusinessRow[] }) {
     <ReportPanel label="MARKETING COST" title="营销增值费用分析" status="partial" description="金额取增值或营销字段；无有效金额时显示 --。">
       <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "lines", label: "线数", numeric: true }, { key: "amount", label: "金额", numeric: true }]} rows={marketing} summary={marketingSummary} />
     </ReportPanel>
-    <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新装、拆机、变更优先按业务属性（CRM）识别；属性为空或无法识别时，当前计量规则为新增量可兜底判为新装。拆装比为拆机线数 / 新装线数。">
-      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "installs", label: "新增数", numeric: true }, { key: "installAmount", label: "新增业务量", numeric: true }, { key: "removals", label: "拆机数", numeric: true }, { key: "removalAmount", label: "拆机业务量", numeric: true }, { key: "netLines", label: "净增数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "ratio", label: "拆装比", numeric: true }]} rows={netGrowth} summary={netSummary} />
+    <ReportPanel wide label="NET GROWTH" title="销售业务净增情况" description="新增口径：当前计量规则为“新增量”或初始完工日期在 2026 年。净增扣减“当年新增当年拆机”：同时符合新增口径、业务属性为拆机且 CRM 完工日期在 2026 年。末列“2026 年度拆机”仅按业务属性为拆机且 CRM 完工日期在 2026 年统计，不混入净增。">
+      <ReportTable columns={[{ key: "owner", label: "负责人" }, { key: "additions", label: "新增线数", numeric: true }, { key: "additionAmount", label: "新增业务量", numeric: true }, { key: "sameYearRemovals", label: "当年新增当年拆机线数", numeric: true }, { key: "sameYearRemovalAmount", label: "当年新增当年拆机业务量", numeric: true }, { key: "netLines", label: "净增线数", numeric: true }, { key: "netAmount", label: "净增业务量", numeric: true }, { key: "annualRemovals", label: "2026 年度拆机线数", numeric: true }, { key: "annualRemovalAmount", label: "2026 年度拆机业务量", numeric: true }, { key: "ratio", label: "当年新增拆机率", numeric: true }]} rows={netGrowth} summary={netSummary} />
     </ReportPanel>
   </section>;
 }

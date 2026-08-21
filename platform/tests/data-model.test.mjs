@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   applyDynamicCalculationRules,
+  buildAnnualRemovalSummary,
+  buildSalesNetGrowth,
   buildDoubleLineAssessment,
   buildMonthlyBusiness,
   buildServiceCombinationRows,
@@ -95,6 +97,28 @@ test("annual install and removal summary groups by source completion date", () =
   ];
   const monthly = buildMonthlyBusiness(rows);
   assert.deepEqual(monthly.map((item) => [item.month, item.installs, item.removals]), [["2026-01", 1, 0], ["2026-04", 0, 1]]);
+});
+
+test("2026 annual removal summary only includes removal records with CRM completion dates in 2026", () => {
+  const rows = [
+    toBusinessRow({ 设备编号: "D-1", 业务属性: "拆机", 完工日期: "2026-01-03", 线数: "2", 月平均计量: "100", 优惠资费: "12000" }),
+    toBusinessRow({ 设备编号: "D-2", 业务属性: "拆机", 完工日期: "2026-01-28", 线数: "1", 月平均计量: "50", 优惠资费: "10000" }),
+    toBusinessRow({ 设备编号: "D-3", 业务属性: "拆机", 完工日期: "2025-02-01", 线数: "9", 月平均计量: "900", 优惠资费: "9000" }),
+    toBusinessRow({ 设备编号: "D-4", 业务属性: "新装", 完工日期: "2026-03-01", 线数: "8", 月平均计量: "800", 优惠资费: "8000" }),
+    toBusinessRow({ 设备编号: "D-5", 业务属性: "拆机", 初始完工日期: "2026-04-01", 完工日期: "", 线数: "7", 月平均计量: "700", 优惠资费: "7000" }),
+  ];
+  assert.deepEqual(buildAnnualRemovalSummary(rows, "2026"), [{ month: "2026-01", records: 2, lines: 3, monthlyMetering: 150, discountedTariff: 22000 }]);
+});
+
+test("sales net growth uses 2026 additions and keeps same-year and annual removals separate", () => {
+  const rows = [
+    toBusinessRow({ 负责人: "销售甲", 业务属性: "新装", 计量规则: "存量", 初始完工日期: "2026-01-05", 线数: "2", 月平均计量: "200" }),
+    toBusinessRow({ 负责人: "销售甲", 业务属性: "变更", 计量规则: "新增量", 初始完工日期: "2025-12-05", 线数: "3", 月平均计量: "300" }),
+    toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "新增量", 初始完工日期: "2026-02-06", 完工日期: "2026-04-06", 线数: "1", 月平均计量: "100" }),
+    toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "存量", 初始完工日期: "2024-01-01", 完工日期: "2026-05-06", 线数: "4", 月平均计量: "400" }),
+    toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "新增量", 初始完工日期: "2026-03-01", 完工日期: "2025-06-06", 线数: "5", 月平均计量: "500" }),
+  ];
+  assert.deepEqual(buildSalesNetGrowth(rows), [{ owner: "销售甲", additions: 11, additionAmount: 1100, sameYearRemovals: 1, sameYearRemovalAmount: 100, netLines: 10, netAmount: 1000, annualRemovals: 5, annualRemovalAmount: 500, sameYearRemovalRate: 100 / 11 }]);
 });
 
 test("partial CRM rows remain available while settlement review reasons stay explicit", () => {
