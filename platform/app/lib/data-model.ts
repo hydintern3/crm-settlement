@@ -44,8 +44,6 @@ export type CalculationRuleConfig = {
   version: string;
   dateMode: "current" | "manual";
   baseDate: string;
-  newVolumeMonths: number;
-  overdueMonths: number;
   removalRateDenominator: "total" | "installs";
 };
 
@@ -316,7 +314,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
   const completedDate = initialCompletedDate || rawCompletedDate;
   const sourceMeteringRule = textValue(first(row, ["计量规则"]));
   const businessType = textValue(first(row, ["业务属性", "业务类型"]));
-  const businessEvent = classifyBusinessEvent(businessType, sourceMeteringRule);
+  const businessEvent = classifyBusinessEvent(businessType);
   return {
     businessType,
     businessCategory: textValue(first(row, ["业务类别", "业务 分类"])),
@@ -366,7 +364,7 @@ export function mergeBusinessRows(older: BusinessRow, newer: BusinessRow): Busin
 
   merged.completedDate = merged.initialCompletedDate || merged.rawCompletedDate;
   merged.completionDateSource = merged.initialCompletedDate ? "初始完工日期" : merged.rawCompletedDate ? "完工日期兜底" : "缺失";
-  const event = classifyBusinessEvent(merged.businessType, merged.meteringRule || merged.sourceMeteringRule);
+  const event = classifyBusinessEvent(merged.businessType);
   merged.businessEvent = event.businessEvent;
   merged.businessEventSource = event.businessEventSource;
   return merged;
@@ -377,16 +375,15 @@ function sumKnown(values: NumericValue[]): NumericValue {
   return known.length ? known.reduce((sum, value) => sum + value, 0) : null;
 }
 
-export function classifyBusinessEvent(businessType: string, meteringRule: string): Pick<BusinessRow, "businessEvent" | "businessEventSource"> {
+export function classifyBusinessEvent(businessType: string): Pick<BusinessRow, "businessEvent" | "businessEventSource"> {
   if (/拆机|退订|注销/.test(businessType)) return { businessEvent: "拆机", businessEventSource: "业务属性" };
   if (/变更|改造|迁移/.test(businessType)) return { businessEvent: "变更", businessEventSource: "业务属性" };
   if (/新装|新增|开通/.test(businessType)) return { businessEvent: "新装", businessEventSource: "业务属性" };
-  if (meteringRule === "新增量") return { businessEvent: "新装", businessEventSource: "计量规则兜底" };
   return { businessEvent: "待确认", businessEventSource: "待确认" };
 }
 
 function currentBusinessEvent(row: BusinessRow) {
-  return classifyBusinessEvent(row.businessType, row.meteringRule).businessEvent;
+  return classifyBusinessEvent(row.businessType).businessEvent;
 }
 
 export function isRemoval(row: BusinessRow) {
@@ -395,6 +392,10 @@ export function isRemoval(row: BusinessRow) {
 
 export function isInstall(row: BusinessRow) {
   return currentBusinessEvent(row) === "新装";
+}
+
+export function isNewVolume(row: BusinessRow) {
+  return row.meteringRule === "新增量";
 }
 
 export function isActive(row: BusinessRow) {
@@ -505,7 +506,7 @@ export function convertedLineCount(row: BusinessRow) {
 }
 
 export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75): DoubleLineAssessment {
-  const installs = rows.filter(isInstall);
+  const installs = rows.filter(isNewVolume);
   const removals = rows.filter(isRemoval);
   const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
   const installConvertibleRecords = installs.filter((row) => convertedLineCount(row) > 0).length;
@@ -571,11 +572,9 @@ export function localDateISO(date = new Date()) {
 
 export const DEFAULT_CALCULATION_RULES: CalculationRuleConfig = {
   enabled: true,
-  version: "V1.1",
+  version: "V1.3",
   dateMode: "current",
   baseDate: localDateISO(),
-  newVolumeMonths: 13,
-  overdueMonths: 120,
   removalRateDenominator: "total",
 };
 
@@ -589,18 +588,17 @@ function monthDistance(later: string, earlier: string) {
 export function applyDynamicCalculationRules(rows: BusinessRow[], config: CalculationRuleConfig): BusinessRow[] {
   return rows.map((row) => {
     const sourceMeteringRule = row.sourceMeteringRule || row.meteringRule;
-    if (!config.enabled || !row.completedDate) {
-      const businessEvent = classifyBusinessEvent(row.businessType, sourceMeteringRule);
+    if (!config.enabled || !row.initialCompletedDate) {
+      const businessEvent = classifyBusinessEvent(row.businessType);
       return { ...row, ...businessEvent, sourceMeteringRule, meteringRule: sourceMeteringRule, calculationRuleSource: "CRM静态结果" };
     }
-    const distance = monthDistance(config.baseDate, row.completedDate);
+    const distance = monthDistance(config.baseDate, row.initialCompletedDate);
     let meteringRule = sourceMeteringRule;
-    const baseYear = config.baseDate.match(/^(\d{4})-/)?.[1];
-    if (baseYear && row.completedDate.startsWith(`${baseYear}-`)) meteringRule = "新增量";
-    else if (distance !== null && distance < config.newVolumeMonths) meteringRule = "新量";
-    else if (distance !== null && distance > config.overdueMonths) meteringRule = "超期";
+    if (row.initialCompletedDate.startsWith("2026-")) meteringRule = "新增量";
+    else if (distance !== null && distance < 13) meteringRule = "新量";
+    else if (distance !== null && distance > 120) meteringRule = "超期";
     else if (distance !== null) meteringRule = "存量";
-    const businessEvent = classifyBusinessEvent(row.businessType, meteringRule);
+    const businessEvent = classifyBusinessEvent(row.businessType);
     return { ...row, ...businessEvent, sourceMeteringRule, meteringRule, calculationRuleSource: "平台动态计算" };
   });
 }
@@ -613,7 +611,7 @@ export function buildBusinessProgress(rows: BusinessRow[], dimension: "company" 
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.entries()].map(([key, group]) => {
-    const installs = group.filter(isInstall);
+    const installs = group.filter(isNewVolume);
     const removals = group.filter(isRemoval);
     const totalLines = group.reduce((sum, row) => sum + lineCount(row), 0);
     const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
@@ -689,7 +687,7 @@ export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
   const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
   return owners.map((owner) => {
     const group = rows.filter((row) => row.owner === owner);
-    const installs = group.filter(isInstall);
+    const installs = group.filter(isNewVolume);
     const removals = group.filter(isRemoval);
     const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
     const removalLines = removals.reduce((sum, row) => sum + lineCount(row), 0);
@@ -709,7 +707,7 @@ export function buildNetGrowth(rows: BusinessRow[]): NetGrowthRow[] {
 }
 
 export function buildSalesNetGrowth(rows: BusinessRow[], year = "2026"): SalesNetGrowthRow[] {
-  const isAnnualAddition = (row: BusinessRow) => row.meteringRule === "新增量" || row.initialCompletedDate.startsWith(`${year}-`);
+  const isAnnualAddition = (row: BusinessRow) => row.meteringRule === "新增量";
   const isAnnualRemoval = (row: BusinessRow) => isRemoval(row) && row.rawCompletedDate.startsWith(`${year}-`);
   const owners = [...new Set(rows.map((row) => row.owner).filter(Boolean))];
   return owners.map((owner) => {
@@ -771,10 +769,10 @@ export function buildDataQualityMetrics(rows: BusinessRow[]): DataQualityMetric[
     { key: "date-fallback", label: "完工日期兜底", value: rows.filter((row) => row.completionDateSource === "完工日期兜底").length, status: "pass", description: "已纳入年月、趋势和留存统计" },
     { key: "effective-date-missing", label: "统计完工日期缺失", value: rows.filter((row) => !row.completedDate).length, status: "pass", description: "初始完工日期和完工日期均为空" },
     { key: "date-order", label: "完工日期早于初始完工日期", value: rows.filter((row) => row.initialCompletedDate && row.rawCompletedDate && row.rawCompletedDate < row.initialCompletedDate).length, status: "pass", description: "日期顺序异常需人工复核" },
-    { key: "business-fallback", label: "新增量兜底判定为新装", value: rows.filter((row) => row.businessEventSource === "计量规则兜底").length, status: "pass", description: "业务属性为空或无法识别，由按当前日期计算的计量规则中的新增量兜底" },
+    { key: "business-attribute-missing", label: "业务属性待确认", value: rows.filter((row) => row.businessEventSource === "待确认").length, status: "pass", description: "业务属性仅作为新装、变更、拆机标识；计量规则不会反向补写业务属性" },
     { key: "business-rule-conflict", label: "业务属性与新增量冲突", value: rows.filter((row) => /拆机|退订|注销|变更|改造|迁移/.test(row.businessType) && row.meteringRule === "新增量").length, status: "pass", description: "保留明确业务属性，进入人工复核，不由兜底规则覆盖" },
   ];
-  return metrics.map((metric) => ({ ...metric, status: metric.key === "business-fallback" ? "pass" : metric.value ? "review" : "pass" }));
+  return metrics.map((metric) => ({ ...metric, status: metric.key === "business-attribute-missing" ? "pass" : metric.value ? "review" : "pass" }));
 }
 
 export function summarizeRows(rows: BusinessRow[]) {
@@ -782,7 +780,7 @@ export function summarizeRows(rows: BusinessRow[]) {
   return {
     total: rows.length,
     active: rows.filter(isActive).length,
-    installs: rows.filter(isInstall).length,
+    installs: rows.filter(isNewVolume).length,
     removals: rows.filter(isRemoval).length,
     monthlyMetering: sumKnown(rows.map((row) => row.monthlyMetering)),
     monthlyTariff: sumKnown(rows.map((row) => row.monthlyTariff)),
@@ -802,7 +800,7 @@ export function buildSnapshot(
     const month = row.completedDate.match(/^(\d{4}-\d{2})/)?.[1];
     if (month) {
       const item = monthlyMap.get(month) ?? { installs: 0, removals: 0, lines: 0, amounts: [], tariffs: [] };
-      if (isInstall(row)) item.installs += 1;
+      if (isNewVolume(row)) item.installs += 1;
       if (isRemoval(row)) item.removals += 1;
       item.lines += lineCount(row);
       item.amounts.push(row.monthlyMetering);
@@ -835,7 +833,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     const completedDate = initialCompletedDate || rawCompletedDate;
     const sourceMeteringRule = row.sourceMeteringRule ?? row.meteringRule ?? "";
     const businessType = row.businessType ?? "";
-    const businessEvent = classifyBusinessEvent(businessType, row.meteringRule ?? sourceMeteringRule);
+    const businessEvent = classifyBusinessEvent(businessType);
     return ({
     ...row,
     businessType,

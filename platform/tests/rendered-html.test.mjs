@@ -80,8 +80,9 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(dataModelSource, /serviceCodeII/);
   assert.match(dataModelSource, /applyDynamicCalculationRules/);
   assert.match(dataModelSource, /classifyBusinessEvent/);
-  assert.match(dataModelSource, /计量规则兜底/);
-  assert.match(dataModelSource, /const baseYear = config\.baseDate/);
+  assert.match(dataModelSource, /initialCompletedDate\.startsWith\("2026-"\)/);
+  assert.match(dataModelSource, /distance !== null && distance < 13/);
+  assert.match(dataModelSource, /distance !== null && distance > 120/);
   assert.match(dataModelSource, /buildBusinessProgress/);
   assert.match(dataModelSource, /netMonthlyMetering/);
   assert.match(dataModelSource, /netAverageTariff/);

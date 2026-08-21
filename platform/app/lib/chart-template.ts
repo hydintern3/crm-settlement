@@ -96,7 +96,7 @@ export const CHART_MEASURE_FIELDS: readonly MeasureDefinition[] = [
 
 export const AGGREGATION_LABELS: Record<Aggregation, string> = {
   count: "计数", distinct: "去重计数", sum: "合计", average: "平均", min: "最小值", max: "最大值",
-  installs: "新装数", removals: "拆机数", netGrowth: "净增数", activeRate: "活跃率",
+  installs: "新增量数", removals: "拆机数", netGrowth: "净增数", activeRate: "活跃率",
 };
 
 export const CHART_TYPE_LABELS: Record<ChartType, string> = {

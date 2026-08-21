@@ -1,4 +1,4 @@
-import { isActive, type BusinessRow, type NumericValue } from "./data-model.ts";
+import { isActive, isNewVolume, isRemoval, type BusinessRow, type NumericValue } from "./data-model.ts";
 import { chartField, dimensionRawValue, measureDefinition, measureTitle, type ChartMeasure, type ChartTemplateDraft, type DimensionField, type TimeGranularity } from "./chart-template.ts";
 
 export type ChartSeriesData = { name: string; values: NumericValue[] };
@@ -29,9 +29,9 @@ function aggregate(rows: BusinessRow[], measure: ChartMeasure): NumericValue {
   if (measure.aggregation === "count") return rows.length;
   const rowField = measure.field as keyof BusinessRow;
   if (measure.aggregation === "distinct") return new Set(rows.map((row) => String(row[rowField] ?? "").trim()).filter(Boolean)).size;
-  if (measure.aggregation === "installs") return rows.filter((row) => row.businessEvent === "新装").length;
-  if (measure.aggregation === "removals") return rows.filter((row) => row.businessEvent === "拆机").length;
-  if (measure.aggregation === "netGrowth") return rows.reduce((total, row) => total + (row.businessEvent === "新装" ? 1 : row.businessEvent === "拆机" ? -1 : 0), 0);
+  if (measure.aggregation === "installs") return rows.filter(isNewVolume).length;
+  if (measure.aggregation === "removals") return rows.filter(isRemoval).length;
+  if (measure.aggregation === "netGrowth") return rows.reduce((total, row) => total + (isNewVolume(row) ? 1 : isRemoval(row) ? -1 : 0), 0);
   if (measure.aggregation === "activeRate") return rows.length ? rows.filter(isActive).length / rows.length * 100 : null;
   const values = rows.map((row) => row[rowField]).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   if (!values.length) return null;

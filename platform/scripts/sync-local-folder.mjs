@@ -116,15 +116,14 @@ const providersByCode = new Map(
   providerRows.map((row) => [row["服务编号"], row]),
 );
 const totalAmount = businessRows.reduce((sum, row) => sum + (number(row["月平均计量"]) ?? 0), 0);
-const classifyBusinessEvent = (businessType = "", meteringRule = "") => {
+const classifyBusinessEvent = (businessType = "") => {
   if (/拆机|退订|注销/.test(businessType)) return { businessEvent: "拆机", businessEventSource: "业务属性" };
   if (/变更|改造|迁移/.test(businessType)) return { businessEvent: "变更", businessEventSource: "业务属性" };
   if (/新装|新增|开通/.test(businessType)) return { businessEvent: "新装", businessEventSource: "业务属性" };
-  if (meteringRule === "新增量") return { businessEvent: "新装", businessEventSource: "计量规则兜底" };
   return { businessEvent: "待确认", businessEventSource: "待确认" };
 };
-const isRemoval = (row) => classifyBusinessEvent(row["业务属性"], row["计量规则"]).businessEvent === "拆机";
-const isInstall = (row) => classifyBusinessEvent(row["业务属性"], row["计量规则"]).businessEvent === "新装";
+const isRemoval = (row) => classifyBusinessEvent(row["业务属性"]).businessEvent === "拆机";
+const isNewVolume = (row) => row["计量规则"] === "新增量";
 const isActive = (row) => row["活跃状态"].includes("活跃") && !row["活跃状态"].includes("不");
 
 const monthlyMap = new Map(
@@ -140,7 +139,7 @@ for (const row of businessRows) {
   const month = date.slice(5, 7);
   const item = monthlyMap.get(month);
   if (!item) continue;
-  if (isInstall(row)) item.installs += 1;
+  if (isNewVolume(row)) item.installs += 1;
   if (isRemoval(row)) item.removals += 1;
   item.amount += number(row["月平均计量"]) ?? 0;
 }
@@ -161,7 +160,7 @@ for (const row of businessRows) {
 const safeRows = businessRows.slice(0, 500).map((row) => {
   const initialCompletedDate = normalizedDate(row["初始完工日期"]);
   const rawCompletedDate = normalizedDate(row["完工日期"]);
-  const businessEvent = classifyBusinessEvent(row["业务属性"], row["计量规则"]);
+  const businessEvent = classifyBusinessEvent(row["业务属性"]);
   return ({
   businessType: row["业务属性"],
   ...businessEvent,
@@ -208,13 +207,13 @@ const snapshot = {
   summary: {
     total: businessRows.length,
     active: businessRows.filter(isActive).length,
-    installs: businessRows.filter(isInstall).length,
+    installs: businessRows.filter(isNewVolume).length,
     removals: businessRows.filter(isRemoval).length,
     monthlyMetering: totalAmount,
     review: businessRows.filter((row) => {
       const provider = providersByCode.get(row["I 服务编号"]);
       const mayCalculate =
-        isInstall(row) &&
+        isNewVolume(row) &&
         row["付费周期"] === "月" &&
         row["活跃状态"] === "活跃" &&
         ["服务中", "激活服务"].includes(provider?.["服务状态"]) &&

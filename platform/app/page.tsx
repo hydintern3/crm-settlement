@@ -219,14 +219,14 @@ function DataTable({ rows, pageSize = 20 }: { rows: BusinessRow[]; pageSize?: nu
 
 function CalculationRulePanel({ config, rows, onChange }: { config: CalculationRuleConfig; rows: BusinessRow[]; onChange: (next: CalculationRuleConfig) => void }) {
   const differences = rows.filter((row) => row.sourceMeteringRule && row.meteringRule !== row.sourceMeteringRule).length;
-  const numberChange = (key: "newVolumeMonths" | "overdueMonths", value: string) => onChange({ ...config, [key]: Number(value) || 0 });
-  return <Panel label="DYNAMIC CALCULATION" title="动态计算规则" aside={<span className={`status-chip ${config.enabled ? "ready" : "pending"}`}>{config.enabled ? "已启用" : "读取CRM结果"}</span>}><p className="panel-note">CRM导入值保持不变；平台依据下列参数动态生成当前计量规则，并保留源结果用于对比。设置保存在当前浏览器。</p><div className="calculation-grid">
+  return <Panel label="DYNAMIC CALCULATION" title="动态计算规则" aside={<span className={`status-chip ${config.enabled ? "ready" : "pending"}`}>{config.enabled ? "已启用" : "读取CRM结果"}</span>}><p className="panel-note">业务属性只作为新装、变更、拆机标识；平台按初始完工日期和 Excel 公式动态生成计量规则，并保留 CRM 源结果用于对比。新增量年度、月差阈值均为财务确认口径，不可在页面修改。</p><div className="calculation-grid">
     <label><span>动态计算</span><select value={config.enabled ? "on" : "off"} onChange={(event) => onChange({ ...config, enabled: event.target.value === "on" })}><option value="on">启用</option><option value="off">停用</option></select></label>
     <label><span>规则版本</span><input value={config.version} onChange={(event) => onChange({ ...config, version: event.target.value })} /></label>
     <label><span>日期模式</span><select value={config.dateMode} onChange={(event) => onChange({ ...config, dateMode: event.target.value as "current" | "manual", baseDate: event.target.value === "manual" ? localDateISO() : config.baseDate })}><option value="current">跟随当前日期</option><option value="manual">指定审计日期</option></select></label>
     <label><span>计算基准日期</span><input type="date" disabled={config.dateMode === "current"} value={config.dateMode === "current" ? localDateISO() : config.baseDate} onChange={(event) => onChange({ ...config, baseDate: event.target.value })} /></label>
-    <label><span>新量阈值（月）</span><input type="number" min="0" value={config.newVolumeMonths} onChange={(event) => numberChange("newVolumeMonths", event.target.value)} /></label>
-    <label><span>超期阈值（月）</span><input type="number" min="0" value={config.overdueMonths} onChange={(event) => numberChange("overdueMonths", event.target.value)} /></label>
+    <label><span>新增量年度</span><input value="2026" readOnly /></label>
+    <label><span>新量月差</span><input value="小于 13 个月" readOnly /></label>
+    <label><span>超期月差</span><input value="大于 120 个月" readOnly /></label>
     <label><span>拆机率分母</span><select value={config.removalRateDenominator} onChange={(event) => onChange({ ...config, removalRateDenominator: event.target.value as "total" | "installs" })}><option value="total">总线数</option><option value="installs">新增线数</option></select></label>
   </div><div className="rule-audit"><span><strong>{rows.length}</strong> 当前记录</span><span><strong>{differences}</strong> 与CRM静态结果不同</span><span><strong>{config.version || "--"}</strong> 当前规则版本</span></div></Panel>;
 }

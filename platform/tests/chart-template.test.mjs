@@ -44,7 +44,7 @@ test("chart aggregation supports business metrics, distinct counts and full-cate
   draft.options.topN = 10;
   const growth = buildChartData(rows, draft);
   assert.equal(growth.series[0].values[growth.categories.indexOf("张三")], 0);
-  assert.equal(growth.series[0].values[growth.categories.indexOf("李四")], 1);
+  assert.equal(growth.series[0].values[growth.categories.indexOf("李四")], 0);
 });
 
 test("series split and active rate are calculated from the same grouped records", () => {

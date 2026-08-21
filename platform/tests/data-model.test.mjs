@@ -11,7 +11,9 @@ import {
   buildServicePolicyDistribution,
   buildSettlementReviewSummary,
   buildSnapshot,
+  buildBusinessProgress,
   classifyBusinessEvent,
+  isNewVolume,
   localDateISO,
   maskContactLandline,
   toBusinessRow,
@@ -24,24 +26,22 @@ const rules = (baseDate) => ({
   version: "test",
   dateMode: "manual",
   baseDate,
-  newVolumeMonths: 13,
-  overdueMonths: 120,
   removalRateDenominator: "total",
 });
 
-test("business event keeps explicit attributes and uses incremental volume only as fallback", () => {
-  assert.deepEqual(classifyBusinessEvent("新装", "存量"), { businessEvent: "新装", businessEventSource: "业务属性" });
-  assert.deepEqual(classifyBusinessEvent("变更", "新增量"), { businessEvent: "变更", businessEventSource: "业务属性" });
-  assert.deepEqual(classifyBusinessEvent("拆机", "新增量"), { businessEvent: "拆机", businessEventSource: "业务属性" });
-  assert.deepEqual(classifyBusinessEvent("", "新增量"), { businessEvent: "新装", businessEventSource: "计量规则兜底" });
-  assert.deepEqual(classifyBusinessEvent("未识别", "存量"), { businessEvent: "待确认", businessEventSource: "待确认" });
+test("business event only reflects the CRM business attribute", () => {
+  assert.deepEqual(classifyBusinessEvent("新装"), { businessEvent: "新装", businessEventSource: "业务属性" });
+  assert.deepEqual(classifyBusinessEvent("变更"), { businessEvent: "变更", businessEventSource: "业务属性" });
+  assert.deepEqual(classifyBusinessEvent("拆机"), { businessEvent: "拆机", businessEventSource: "业务属性" });
+  assert.deepEqual(classifyBusinessEvent(""), { businessEvent: "待确认", businessEventSource: "待确认" });
+  assert.deepEqual(classifyBusinessEvent("未识别"), { businessEvent: "待确认", businessEventSource: "待确认" });
 });
 
 test("field mapping preserves source values and audit fields", () => {
   const row = toBusinessRow({ 业务类型: "", 计量规则: "新增量", 初始完工日期: "2026/1/2", 现日期: "2026/7/28", 月平均资费: "10000", 优惠资费: "888", 联系人固话: "021-87654321", 计算状态: "暂停计算", 分期计算标识: "年付半年结", 拆机类型: "用户拆机", 用户拆机原因: "经营调整" });
   assert.equal(row.businessType, "");
-  assert.equal(row.businessEvent, "新装");
-  assert.equal(row.businessEventSource, "计量规则兜底");
+  assert.equal(row.businessEvent, "待确认");
+  assert.equal(row.businessEventSource, "待确认");
   assert.equal(row.initialCompletedDate, "2026-01-02");
   assert.equal(row.sourceCurrentDate, "2026-07-28");
   assert.equal(row.sourceMeteringRule, "新增量");
@@ -57,10 +57,10 @@ test("field mapping preserves source values and audit fields", () => {
 
 test("double-line assessment uses monthly tariff with 2,000 yuan increments and a 20-line cap", () => {
   const rows = [
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "9999", 优惠资费: "50000" }),
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "10000" }),
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "12000" }),
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "14000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "9999", 优惠资费: "50000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "10000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "12000" }),
+    toBusinessRow({ 业务属性: "新装", 计量规则: "新增量", 线数: "1", 月平均资费: "14000" }),
     toBusinessRow({ 业务属性: "拆机", 线数: "2", 月平均资费: "50000" }),
   ];
   const result = buildDoubleLineAssessment(rows, 0.75);
@@ -122,7 +122,7 @@ test("sales net growth uses 2026 additions and keeps same-year and annual remova
     toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "存量", 初始完工日期: "2024-01-01", 完工日期: "2026-05-06", 线数: "4", 月平均计量: "400" }),
     toBusinessRow({ 负责人: "销售甲", 业务属性: "拆机", 计量规则: "新增量", 初始完工日期: "2026-03-01", 完工日期: "2025-06-06", 线数: "5", 月平均计量: "500" }),
   ];
-  assert.deepEqual(buildSalesNetGrowth(rows), [{ owner: "销售甲", additions: 11, additionAmount: 1100, sameYearRemovals: 1, sameYearRemovalAmount: 100, netLines: 10, netAmount: 1000, annualRemovals: 5, annualRemovalAmount: 500, sameYearRemovalRate: 100 / 11 }]);
+  assert.deepEqual(buildSalesNetGrowth(rows), [{ owner: "销售甲", additions: 9, additionAmount: 900, sameYearRemovals: 1, sameYearRemovalAmount: 100, netLines: 8, netAmount: 800, annualRemovals: 5, annualRemovalAmount: 500, sameYearRemovalRate: 100 / 9 }]);
 });
 
 test("partial CRM rows remain available while settlement review reasons stay explicit", () => {
@@ -166,7 +166,7 @@ test("newer CRM versions override non-empty fields without erasing existing valu
   assert.deepEqual(result.source.deduplication, { keyField: "设备编号", inputRows: 5, outputRows: 4, removedRows: 1, duplicateKeys: 1, blankKeyRows: 2, strategy: "按版本发布时间从旧到新整合；同一设备编号由较新版本的非空字段覆盖，较新空值保留已有值；设备编号为空的记录全部保留" });
 });
 
-test("metering rules derive incremental year and month thresholds from the base date", () => {
+test("metering rules follow the fixed 2026 Excel formula and do not infer business attributes", () => {
   const input = [
     ["2026-01-01", "新增量"],
     ["2025-07-01", "新量"],
@@ -177,14 +177,29 @@ test("metering rules derive incremental year and month thresholds from the base 
 
   const output = applyDynamicCalculationRules(input, rules("2026-07-28"));
   assert.deepEqual(output.map((row) => row.meteringRule), ["新增量", "新量", "存量", "存量", "超期"]);
-  assert.equal(output[0].businessEvent, "新装");
-  assert.equal(output[0].businessEventSource, "计量规则兜底");
+  assert.equal(output[0].businessEvent, "待确认");
+  assert.equal(output[0].businessEventSource, "待确认");
 
   const nextYear = applyDynamicCalculationRules(
     [toBusinessRow({ 业务属性: "", 计量规则: "存量", 初始完工日期: "2027-02-01" })],
     rules("2027-08-18"),
   );
-  assert.equal(nextYear[0].meteringRule, "新增量");
+  assert.equal(nextYear[0].meteringRule, "新量");
+
+  const missingInitialDate = applyDynamicCalculationRules(
+    [toBusinessRow({ 业务属性: "新装", 计量规则: "存量", 完工日期: "2026-02-01" })],
+    rules("2026-07-28"),
+  );
+  assert.equal(missingInitialDate[0].meteringRule, "存量");
+  assert.equal(missingInitialDate[0].calculationRuleSource, "CRM静态结果");
+});
+
+test("new-volume metrics include changed business and exclude installed stock business", () => {
+  const changedNewVolume = toBusinessRow({ 负责人: "销售甲", 业务属性: "变更", 计量规则: "新增量", 线数: "3" });
+  const installedStock = toBusinessRow({ 负责人: "销售甲", 业务属性: "新装", 计量规则: "存量", 线数: "2" });
+  assert.equal(isNewVolume(changedNewVolume), true);
+  assert.equal(isNewVolume(installedStock), false);
+  assert.equal(buildBusinessProgress([changedNewVolume, installedStock], "owner", "total")[0].installs, 3);
 });
 
 test("local date formatting does not use UTC date boundaries", () => {
