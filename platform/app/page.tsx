@@ -131,13 +131,13 @@ function DistributionChart({ items, onSelect }: { items: RankedItem[]; onSelect?
 }
 
 function exportRows(rows: BusinessRow[]) {
-  const headers = ["设备编号", "业务属性判断（平台）", "判断依据（平台）", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "统计完工日期（平台）", "日期取值来源（平台）", "表内现日期", "活跃状态", "计量规则（按当前日期计算）", "计量规则来源（平台）", "业务类别", "计算状态", "计算方式", "分期计算标识", "拆机类型", "用户拆机原因", "联系人固话（脱敏）", "付款周期", "服务分类", "线数", "月平均计量（元）", "优惠资费", "营销增值费用", "是否低于授权价", "业务毛利"];
+  const headers = ["设备编号", "业务属性判断（平台）", "判断依据（平台）", "业务名称", "负责人", "供应商", "I服务编号", "I服务简称", "II服务编号", "II服务简称", "初始完工日期", "完工日期", "统计完工日期（平台）", "日期取值来源（平台）", "表内现日期", "活跃状态", "计量规则（按当前日期计算）", "计量规则来源（平台）", "业务类别", "计算状态", "计算方式", "分期计算标识", "拆机类型", "用户拆机原因", "联系人固话（脱敏）", "付款周期", "服务分类", "线数", "月平均计量（元）", "月平均资费（元）", "优惠资费", "营销增值费用", "是否低于授权价", "业务毛利"];
   const quote = (value: unknown) => {
     const source = String(value ?? "");
     const safe = typeof value === "string" && /^[=+\-@]/.test(source.trimStart()) ? `'${source}` : source;
     return `"${safe.replace(/"/g, '""')}"`;
   };
-  const body = rows.map((row) => [row.deviceCode, row.businessEvent, row.businessEventSource, row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.initialCompletedDate, row.rawCompletedDate, row.completedDate, row.completionDateSource, row.sourceCurrentDate, row.activeStatus, row.meteringRule, row.calculationRuleSource, row.businessCategory, row.calculationStatus, row.calculationMethod, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked, row.paymentCycle, row.providerCategory, row.lines, row.monthlyMetering, row.discountedTariff, row.marketingFee, row.belowAuthorizedPrice, row.grossProfit].map(quote).join(","));
+  const body = rows.map((row) => [row.deviceCode, row.businessEvent, row.businessEventSource, row.businessName, row.owner, row.provider, row.serviceCode, row.serviceName, row.serviceCodeII, row.serviceNameII, row.initialCompletedDate, row.rawCompletedDate, row.completedDate, row.completionDateSource, row.sourceCurrentDate, row.activeStatus, row.meteringRule, row.calculationRuleSource, row.businessCategory, row.calculationStatus, row.calculationMethod, row.installmentCalculationFlag, row.removalType, row.userRemovalReason, row.contactLandlineMasked, row.paymentCycle, row.providerCategory, row.lines, row.monthlyMetering, row.monthlyTariff, row.discountedTariff, row.marketingFee, row.belowAuthorizedPrice, row.grossProfit].map(quote).join(","));
   const blob = new Blob(["\uFEFF", [headers.map(quote).join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -196,7 +196,7 @@ function Metrics({ rows, showAnalysis = true }: { rows: BusinessRow[]; showAnaly
   const summary = summarizeRows(rows);
   const activeRows = rows.filter((row) => row.activeStatus === "活跃" || row.activeStatus === "正常");
   const removalRows = rows.filter((row) => row.businessEvent === "拆机");
-  const monthlyDetails = (source: ReturnType<typeof summarizeRows>) => ["月平均计量 " + moneyYuan(source.monthlyMetering) + " 元", "月平均资费 " + moneyYuan(source.discountedTariff) + " 元"];
+  const monthlyDetails = (source: ReturnType<typeof summarizeRows>) => ["月平均计量 " + moneyYuan(source.monthlyMetering) + " 元", "月平均资费 " + moneyYuan(source.monthlyTariff) + " 元"];
   const metrics = [
     { label: "业务总记录", value: numberText(summary.total), unit: "条", details: monthlyDetails(summary), tone: "navy" },
     { label: "实际活跃", value: numberText(summary.active), unit: "条", note: summary.total === null ? "--" : ((Number(summary.active) / Math.max(Number(summary.total), 1)) * 100).toFixed(1) + "% 活跃率", details: monthlyDetails(summarizeRows(activeRows)), tone: "green" },

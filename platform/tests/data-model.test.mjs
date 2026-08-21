@@ -38,13 +38,15 @@ test("business event keeps explicit attributes and uses incremental volume only 
 });
 
 test("field mapping preserves source values and audit fields", () => {
-  const row = toBusinessRow({ 业务类型: "", 计量规则: "新增量", 初始完工日期: "2026/1/2", 现日期: "2026/7/28", 联系人固话: "021-87654321", 计算状态: "暂停计算", 分期计算标识: "年付半年结", 拆机类型: "用户拆机", 用户拆机原因: "经营调整" });
+  const row = toBusinessRow({ 业务类型: "", 计量规则: "新增量", 初始完工日期: "2026/1/2", 现日期: "2026/7/28", 月平均资费: "10000", 优惠资费: "888", 联系人固话: "021-87654321", 计算状态: "暂停计算", 分期计算标识: "年付半年结", 拆机类型: "用户拆机", 用户拆机原因: "经营调整" });
   assert.equal(row.businessType, "");
   assert.equal(row.businessEvent, "新装");
   assert.equal(row.businessEventSource, "计量规则兜底");
   assert.equal(row.initialCompletedDate, "2026-01-02");
   assert.equal(row.sourceCurrentDate, "2026-07-28");
   assert.equal(row.sourceMeteringRule, "新增量");
+  assert.equal(row.monthlyTariff, 10000);
+  assert.equal(row.discountedTariff, 888);
   assert.equal(row.contactLandlineMasked, "****-4321");
   assert.equal(row.calculationStatus, "暂停计算");
   assert.equal(row.installmentCalculationFlag, "年付半年结");
@@ -53,19 +55,21 @@ test("field mapping preserves source values and audit fields", () => {
   assert.equal(maskContactLandline("1234"), "****");
 });
 
-test("double-line assessment applies threshold, 2,000 yuan increments and 20-line cap consistently", () => {
+test("double-line assessment uses monthly tariff with 2,000 yuan increments and a 20-line cap", () => {
   const rows = [
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "9999" }),
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "10000" }),
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "12000" }),
-    toBusinessRow({ 业务属性: "新装", 线数: "1", 优惠资费: "14000" }),
-    toBusinessRow({ 业务属性: "拆机", 线数: "2", 优惠资费: "50000" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "9999", 优惠资费: "50000" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "10000" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "12000" }),
+    toBusinessRow({ 业务属性: "新装", 线数: "1", 月平均资费: "14000" }),
+    toBusinessRow({ 业务属性: "拆机", 线数: "2", 月平均资费: "50000" }),
   ];
   const result = buildDoubleLineAssessment(rows, 0.75);
   assert.equal(result.installLines, 4);
+  assert.equal(result.installConvertibleRecords, 3);
   assert.equal(result.installConvertedLines, 6);
   assert.equal(result.installTotalLines, 10);
   assert.equal(result.removalLines, 2);
+  assert.equal(result.removalConvertibleRecords, 1);
   assert.equal(result.removalConvertedLines, 20);
   assert.equal(result.removalTotalLines, 22);
   assert.equal(result.rawRatio, 50);

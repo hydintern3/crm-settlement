@@ -24,6 +24,7 @@ export type BusinessRow = {
   calculationRuleSource: "CRM静态结果" | "平台动态计算";
   lines: NumericValue;
   monthlyMetering: NumericValue;
+  monthlyTariff: NumericValue;
   discountedTariff: NumericValue;
   marketingFee: NumericValue;
   paymentCycle: string;
@@ -152,9 +153,11 @@ export type SalesNetGrowthRow = {
 export type DoubleLineAssessment = {
   target: number;
   installLines: number;
+  installConvertibleRecords: number;
   installConvertedLines: number;
   installTotalLines: number;
   removalLines: number;
+  removalConvertibleRecords: number;
   removalConvertedLines: number;
   removalTotalLines: number;
   rawRatio: NumericValue;
@@ -221,6 +224,7 @@ export type Snapshot = {
     installs: NumericValue;
     removals: NumericValue;
     monthlyMetering: NumericValue;
+    monthlyTariff: NumericValue;
     discountedTariff: NumericValue;
     review: NumericValue;
   };
@@ -246,7 +250,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   mode: "empty",
   generatedAt: new Date(0).toISOString(),
   source: { label: "尚未导入数据", files: [], currentFile: "--", sheets: [] },
-  summary: { total: null, active: null, installs: null, removals: null, monthlyMetering: null, discountedTariff: null, review: null },
+  summary: { total: null, active: null, installs: null, removals: null, monthlyMetering: null, monthlyTariff: null, discountedTariff: null, review: null },
   monthly: [],
   meteringRules: [],
   owners: [],
@@ -336,6 +340,7 @@ export function toBusinessRow(row: RawRow): BusinessRow {
     calculationRuleSource: "CRM静态结果",
     lines: numericValue(first(row, ["线数", "数量"])),
     monthlyMetering: numericValue(first(row, ["月平均计量", "月均计量", "月平均金额"])),
+    monthlyTariff: numericValue(first(row, ["月平均资费"])),
     discountedTariff: numericValue(first(row, ["优惠资费", "年优惠资费"])),
     marketingFee: numericValue(first(row, ["增值", "营销增值费用", "I 营销", "I营销"])),
     paymentCycle: textValue(first(row, ["付费周期", "付款周期"])),
@@ -494,8 +499,8 @@ function lineCount(row: BusinessRow) {
 }
 
 export function convertedLineCount(row: BusinessRow) {
-  const tariff = row.discountedTariff;
-  if (tariff === null || tariff < 10_000) return 0;
+  const tariff = row.monthlyTariff;
+  if (!Number.isFinite(tariff) || tariff === null || tariff < 10_000) return 0;
   return Math.min(20, 1 + Math.floor((tariff - 10_000) / 2_000));
 }
 
@@ -503,8 +508,10 @@ export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75): D
   const installs = rows.filter(isInstall);
   const removals = rows.filter(isRemoval);
   const installLines = installs.reduce((sum, row) => sum + lineCount(row), 0);
+  const installConvertibleRecords = installs.filter((row) => convertedLineCount(row) > 0).length;
   const installConvertedLines = installs.reduce((sum, row) => sum + convertedLineCount(row), 0);
   const removalLines = removals.reduce((sum, row) => sum + lineCount(row), 0);
+  const removalConvertibleRecords = removals.filter((row) => convertedLineCount(row) > 0).length;
   const removalConvertedLines = removals.reduce((sum, row) => sum + convertedLineCount(row), 0);
   const installTotalLines = installLines + installConvertedLines;
   const removalTotalLines = removalLines + removalConvertedLines;
@@ -512,9 +519,11 @@ export function buildDoubleLineAssessment(rows: BusinessRow[], target = 0.75): D
   return {
     target: safeTarget,
     installLines,
+    installConvertibleRecords,
     installConvertedLines,
     installTotalLines,
     removalLines,
+    removalConvertibleRecords,
     removalConvertedLines,
     removalTotalLines,
     rawRatio: installLines ? Number((removalLines / installLines * 100).toFixed(6)) : null,
@@ -776,6 +785,7 @@ export function summarizeRows(rows: BusinessRow[]) {
     installs: rows.filter(isInstall).length,
     removals: rows.filter(isRemoval).length,
     monthlyMetering: sumKnown(rows.map((row) => row.monthlyMetering)),
+    monthlyTariff: sumKnown(rows.map((row) => row.monthlyTariff)),
     discountedTariff: sumKnown(rows.map((row) => row.discountedTariff)),
     review: rows.filter(needsReview).length,
   };
@@ -796,7 +806,7 @@ export function buildSnapshot(
       if (isRemoval(row)) item.removals += 1;
       item.lines += lineCount(row);
       item.amounts.push(row.monthlyMetering);
-      item.tariffs.push(row.discountedTariff);
+      item.tariffs.push(row.monthlyTariff);
       monthlyMap.set(month, item);
     }
     if (row.meteringRule) ruleMap.set(row.meteringRule, (ruleMap.get(row.meteringRule) ?? 0) + 1);
@@ -844,6 +854,7 @@ export function normalizeSnapshot(input: Partial<Snapshot>): Snapshot {
     deviceCode: row.deviceCode ?? "",
     lines: row.lines === undefined ? null : row.lines,
     monthlyMetering: row.monthlyMetering === undefined ? null : row.monthlyMetering,
+    monthlyTariff: row.monthlyTariff === undefined ? null : row.monthlyTariff,
     discountedTariff: row.discountedTariff === undefined ? null : row.discountedTariff,
     marketingFee: row.marketingFee === undefined ? null : row.marketingFee,
     paymentCycle: row.paymentCycle ?? "",

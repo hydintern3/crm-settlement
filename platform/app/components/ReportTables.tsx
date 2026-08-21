@@ -119,13 +119,13 @@ export function DoubleLineOverview({ rows }: { rows: BusinessRow[] }) {
   const formatRatio = (value: NumericValue) => value === null ? "--" : `${number(value, 1)}%`;
   const rowsToDisplay = [{
     key: "assessment",
-    installLines: number(result.installLines), installConvertedLines: number(result.installConvertedLines), installTotalLines: number(result.installTotalLines),
-    removalLines: number(result.removalLines), removalConvertedLines: number(result.removalConvertedLines), removalTotalLines: number(result.removalTotalLines),
+    installLines: number(result.installLines), installConvertibleRecords: number(result.installConvertibleRecords), installConvertedLines: number(result.installConvertedLines), installTotalLines: number(result.installTotalLines),
+    removalLines: number(result.removalLines), removalConvertibleRecords: number(result.removalConvertibleRecords), removalConvertedLines: number(result.removalConvertedLines), removalTotalLines: number(result.removalTotalLines),
     rawRatio: formatRatio(result.rawRatio), convertedRatio: formatRatio(result.convertedRatio), rawPendingLines: number(result.rawPendingLines), convertedPendingLines: number(result.convertedPendingLines),
   }];
-  return <ReportPanel wide label="DOUBLE-LINE ASSESSMENT" title="双线拆装比" description="折算规则：月平均资费低于10,000元不折算；10,000元起每满2,000元计1线，最高20线；新增和拆机使用同一口径。">
+  return <ReportPanel wide label="DOUBLE-LINE ASSESSMENT" title="双线拆装比" description="折算仅取 CRM 源表“月平均资费”：低于10,000元不折算；达到10,000元起每满2,000元增加1线，单条最高20线；新增和拆机使用同一口径。考核合计＝原始线路数＋资费折算线路数。">
     <div className="dimension-tabs" role="group" aria-label="拆装比考核档位"><span className="section-label">考核目标</span><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="0.68">68%</option><option value="0.75">75%</option><option value="custom">自定义</option></select>{target === "custom" && <label><span className="sr-only">自定义拆装比</span><input type="number" min="1" max="200" step="0.1" value={customTarget} onChange={(event) => setCustomTarget(event.target.value)} />%</label>}</div>
-    <ReportTable columns={[{ key: "installLines", label: "新增线路数", numeric: true }, { key: "installConvertedLines", label: "新增折算线路数", numeric: true }, { key: "installTotalLines", label: "合计新增线路数", numeric: true }, { key: "removalLines", label: "拆机线路数", numeric: true }, { key: "removalConvertedLines", label: "拆机折算线路数", numeric: true }, { key: "removalTotalLines", label: "合计拆机线路数", numeric: true }, { key: "rawRatio", label: "原始拆装比", numeric: true }, { key: "convertedRatio", label: "折算拆装比", numeric: true }, { key: "rawPendingLines", label: "原始待补线路数", numeric: true }, { key: "convertedPendingLines", label: "折算后待补线路数", numeric: true }]} rows={rowsToDisplay} />
+    <ReportTable columns={[{ key: "installLines", label: "新增原始线路数", numeric: true }, { key: "installConvertibleRecords", label: "新增符合折算记录数", numeric: true }, { key: "installConvertedLines", label: "新增资费折算线路数", numeric: true }, { key: "installTotalLines", label: "新增考核合计线路数", numeric: true }, { key: "removalLines", label: "拆机原始线路数", numeric: true }, { key: "removalConvertibleRecords", label: "拆机符合折算记录数", numeric: true }, { key: "removalConvertedLines", label: "拆机资费折算线路数", numeric: true }, { key: "removalTotalLines", label: "拆机考核合计线路数", numeric: true }, { key: "rawRatio", label: "原始拆装比", numeric: true }, { key: "convertedRatio", label: "折算拆装比", numeric: true }, { key: "rawPendingLines", label: "原始待补线路数", numeric: true }, { key: "convertedPendingLines", label: "折算后待补线路数", numeric: true }]} rows={rowsToDisplay} />
   </ReportPanel>;
 }
 
@@ -423,7 +423,7 @@ export function SettlementReportTables({ rows }: { rows: BusinessRow[] }) {
     calculationMethod: row.calculationMethod || "--",
     paymentCycle: row.paymentCycle || "--",
     meteringRule: row.meteringRule || "--",
-    monthlyTariff: money(row.discountedTariff),
+    monthlyTariff: money(row.monthlyTariff),
     monthlyMetering: money(row.monthlyMetering),
     grossProfit: money(row.grossProfit),
   }));
