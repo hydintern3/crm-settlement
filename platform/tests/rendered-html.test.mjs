@@ -117,6 +117,7 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(pageSource, /BusinessReportTables/);
   assert.match(pageSource, /SalesReportTables/);
   assert.match(pageSource, /AnnualAdditionReconciliation/);
+  assert.match(pageSource, /SameYearInstallRemovalConfirmation/);
   assert.match(pageSource, /ProviderReportTables/);
   assert.match(pageSource, /SupplierReportTables/);
   assert.match(pageSource, /设备编号/);
@@ -151,6 +152,7 @@ test("keeps local data private and does not fall back to mock records", async ()
   assert.match(reportTablesSource, /CRM 结算准备明细/);
   assert.match(reportTablesSource, /服务商结算候选汇总/);
   assert.match(reportTablesSource, /年度新增复核/);
+  assert.match(reportTablesSource, /新增当年拆机确认/);
   assert.match(reportTablesSource, /不模拟运营应收/);
   assert.doesNotMatch(reportTablesSource, /身份证号码|银行卡号|手机号码/);
   await assert.rejects(access(new URL("public/data/demo-snapshot.json", root)));

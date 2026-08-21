@@ -164,6 +164,7 @@ h2 { margin-bottom: 0; font: 700 16px/1.25 "STSong", "Microsoft YaHei UI", serif
 .dedup-banner small { color: #71887f; font-size: 8px; text-align: right; }
 
 .metric-grid { margin: 17px 0; display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 11px; }
+.metric-grid-overview { grid-template-columns: repeat(5, minmax(0,1fr)); }
 .metric-card {
   min-height: 142px;
   padding: 17px 17px 14px;

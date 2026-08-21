@@ -16,6 +16,7 @@ import {
   isActive,
   isNewVolume,
   isRemoval,
+  isSameYearInstallRemoval,
   isSettlementReviewCandidate,
   type BusinessRow,
   type CalculationRuleConfig,
@@ -281,6 +282,28 @@ export function AnnualAdditionReconciliation({ rows, year = "2026" }: { rows: Bu
   return <section className="module-grid report-module-grid"><ReportPanel wide label="ANNUAL ADDITION RECONCILIATION" title={`${year} 年度新增复核`} status="partial" description={`新增原始线路数仅按初始完工日期在 ${year} 年统计，不受全局年份、业务属性、计量规则或活跃状态筛选影响。状态分层均在该新增总体内计算；“已分层合计”应等于“新增原始线路数”，差额进入人工复核。`}>
     <div className="dimension-tabs" role="tablist" aria-label="年度新增复核维度">{dimensions.map(([key, label]) => <button key={key} className={dimension === key ? "active" : ""} onClick={() => setDimension(key)}>{label}</button>)}</div>
     <ReportTable columns={[{ key: "label", label: "复核维度" }, { key: "records", label: "新增业务数", numeric: true }, { key: "lines", label: "新增原始线路数", numeric: true }, { key: "amount", label: "新增月平均计量", numeric: true }, { key: "active", label: "当前活跃线路数", numeric: true }, { key: "sameYearRemoval", label: "当年新增当年拆机", numeric: true }, { key: "otherRemoval", label: "其他年度拆机", numeric: true }, { key: "removalDateMissing", label: "拆机日期缺失", numeric: true }, { key: "inactive", label: "当前非活跃未拆机", numeric: true }, { key: "statusMissing", label: "活跃状态缺失", numeric: true }, { key: "reconciled", label: "已分层合计", numeric: true }, { key: "unreconciled", label: "待复核差额", numeric: true }]} rows={tableRows} summary={summary} emptyText={`当前版本没有初始完工日期在 ${year} 年的记录`} />
+  </ReportPanel></section>;
+}
+
+export function SameYearInstallRemovalConfirmation({ rows, year = "2026" }: { rows: BusinessRow[]; year?: string }) {
+  const matches = rows.filter((row) => isSameYearInstallRemoval(row, year));
+  const tableRows = matches.map((row, index) => ({
+    key: `${row.deviceCode || "blank"}-${index}`,
+    deviceCode: row.deviceCode || "--",
+    owner: row.owner || "未采集",
+    businessName: row.businessName || "未采集",
+    initialDate: row.initialCompletedDate,
+    removalDate: row.rawCompletedDate,
+    lines: number(lineCount(row)),
+    metering: money(row.monthlyMetering),
+    activeStatus: row.activeStatus || "未采集",
+  }));
+  const summary = matches.length ? {
+    key: "summary", deviceCode: "总计 / 总览", owner: "--", businessName: `${matches.length} 条业务`, initialDate: "--", removalDate: "--",
+    lines: number(matches.reduce((sum, row) => sum + lineCount(row), 0)), metering: money(knownSum(matches.map((row) => row.monthlyMetering))), activeStatus: "--",
+  } : undefined;
+  return <section className="module-grid report-module-grid"><ReportPanel wide label="SAME-YEAR INSTALL / REMOVAL" title={`${year} 年新增当年拆机确认`} status="partial" description={`新增日期取源表“初始完工日期”，拆机日期取源表“完工日期”。仅纳入两项日期均在 ${year} 年且业务属性为拆机的记录；该确认表不受总览全局筛选影响。`}>
+    <ReportTable columns={[{ key: "deviceCode", label: "设备编号" }, { key: "owner", label: "负责人" }, { key: "businessName", label: "业务名称" }, { key: "initialDate", label: "初始完工日期（新增）" }, { key: "removalDate", label: "完工日期（拆机）" }, { key: "lines", label: "线路数", numeric: true }, { key: "metering", label: "月平均计量", numeric: true }, { key: "activeStatus", label: "当前活跃状态" }]} rows={tableRows} summary={summary} emptyText={`当前版本没有 ${year} 年新增当年拆机记录`} />
   </ReportPanel></section>;
 }
 

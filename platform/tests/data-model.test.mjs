@@ -15,6 +15,7 @@ import {
   buildBusinessProgress,
   classifyBusinessEvent,
   isNewVolume,
+  isSameYearInstallRemoval,
   localDateISO,
   maskContactLandline,
   toBusinessRow,
@@ -215,6 +216,14 @@ test("new-volume metrics include changed business and exclude installed stock bu
   assert.equal(isNewVolume(changedNewVolume), true);
   assert.equal(isNewVolume(installedStock), false);
   assert.equal(buildBusinessProgress([changedNewVolume, installedStock], "owner", "total")[0].installs, 3);
+});
+
+test("same-year install removal uses initial completion for addition and CRM completion for removal", () => {
+  const sameYear = toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2026-01-02", 完工日期: "2026-06-03" });
+  assert.equal(isSameYearInstallRemoval(sameYear), true);
+  assert.equal(isSameYearInstallRemoval(toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2026-01-02", 完工日期: "2025-12-31" })), false);
+  assert.equal(isSameYearInstallRemoval(toBusinessRow({ 业务属性: "拆机", 初始完工日期: "2025-12-31", 完工日期: "2026-01-02" })), false);
+  assert.equal(isSameYearInstallRemoval(toBusinessRow({ 业务属性: "新装", 初始完工日期: "2026-01-02", 完工日期: "2026-06-03" })), false);
 });
 
 test("local date formatting does not use UTC date boundaries", () => {

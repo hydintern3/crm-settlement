@@ -414,6 +414,10 @@ export function isNewVolume(row: BusinessRow) {
   return row.meteringRule === "新增量";
 }
 
+export function isSameYearInstallRemoval(row: BusinessRow, year = "2026") {
+  return isRemoval(row) && row.initialCompletedDate.startsWith(`${year}-`) && row.rawCompletedDate.startsWith(`${year}-`);
+}
+
 export function isActive(row: BusinessRow) {
   return row.activeStatus === "活跃" || row.activeStatus === "正常";
 }
